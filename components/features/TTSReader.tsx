@@ -51,8 +51,10 @@ export function TTSReader({ text }: TTSReaderProps) {
     if (!text) {
       wordsRef.current = [];
       textToWordsMapRef.current.clear();
+      console.log("[TTSReader] No text provided");
       return;
     }
+    console.log("[TTSReader] Text received, length:", text.length);
 
     // Get sections from DOM
     const sections = document.querySelectorAll("[data-section-id]");
@@ -158,7 +160,27 @@ export function TTSReader({ text }: TTSReaderProps) {
 
     wordsRef.current = words;
     textToWordsMapRef.current = textMap;
-  }, [text]);
+
+    // If TTS is playing and text changed (e.g., new page loaded), update utterance
+    if (isPlaying && utteranceRef.current && text) {
+      const synth = window.speechSynthesis;
+      const currentCharIndex = utteranceRef.current.charIndex || 0;
+      
+      // Find the current word index in the new text map
+      let newWordIndex = currentWordIndex;
+      for (const [wordIdx, wordData] of textToWordsMapRef.current.entries()) {
+        if (currentCharIndex >= wordData.charStart && currentCharIndex < wordData.charEnd) {
+          newWordIndex = wordIdx;
+          break;
+        }
+      }
+
+      // If the text got longer (new page added), continue with updated utterance
+      // Note: Web Speech API doesn't support updating utterance mid-speech,
+      // so we'll let it continue and the word map will handle the new words
+      setCurrentWordIndex(newWordIndex);
+    }
+  }, [text, isPlaying, currentWordIndex]);
 
   const isSupported =
     typeof window !== "undefined" && "speechSynthesis" in window;
@@ -571,7 +593,14 @@ export function TTSReader({ text }: TTSReaderProps) {
   }, [currentWordIndex, isPlaying, isPaused]);
 
   const handlePlay = () => {
-    if (!isSupported || !text) return;
+    if (!isSupported) {
+      console.warn("[TTSReader] Speech synthesis not supported in this browser");
+      return;
+    }
+    if (!text || !text.trim()) {
+      console.warn("[TTSReader] No text available to read");
+      return;
+    }
 
     if (isPaused && utteranceRef.current) {
       // Resume
@@ -680,6 +709,8 @@ export function TTSReader({ text }: TTSReaderProps) {
       }
     };
 
+    const startTime = Date.now();
+    
     utterance.onend = () => {
       setIsPlaying(false);
       setIsPaused(false);
@@ -716,6 +747,21 @@ export function TTSReader({ text }: TTSReaderProps) {
         );
       });
       wordElementsRef.current.clear();
+
+      // Track TTS usage (fire and forget - don't await)
+      const duration = Math.round((Date.now() - startTime) / 1000); // Duration in seconds
+      const userId = useAppStore.getState().currentPdfId || useAppStore.getState().currentText?.substring(0, 20) || "anonymous";
+      fetch("/api/analytics/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "tts_usage",
+          userId,
+          duration,
+        }),
+      }).catch(() => {
+        // Silently fail - analytics shouldn't break the app
+      });
     };
 
     utterance.onerror = (event) => {
@@ -801,6 +847,7 @@ export function TTSReader({ text }: TTSReaderProps) {
               size="sm"
               className="flex-1"
               aria-label="Start reading"
+              disabled={!text || !text.trim() || !isSupported}
             >
               <Play className="h-4 w-4 mr-2" />
               Start Reading

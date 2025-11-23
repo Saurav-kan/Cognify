@@ -8,6 +8,7 @@ import { AIWidget } from "@/components/features/AIWidget";
 import { PomodoroTimer } from "@/components/features/PomodoroTimer";
 import { ProgressTracker } from "@/components/features/ProgressTracker";
 import { TTSReader } from "@/components/features/TTSReader";
+import { PDFReader } from "@/components/features/PDFReader";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,38 +32,43 @@ export default function ReaderPage() {
     currentSentenceIndex,
     fontFamily,
     darkMode,
+    pdfDisplayMode,
+    pdfScrollingMode,
     toggleBionic,
     toggleFocusMode,
     setSentenceIndex,
     setFontFamily,
     toggleDarkMode,
+    setPdfDisplayMode,
+    setPdfScrollingMode,
     startSession,
+    setCurrentPage,
   } = useAppStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Apply dark mode to document
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [darkMode]);
+  // Get PDF session data
+  const pdfSessionId = useAppStore((state) => state.pdfSessionId);
+  const currentPdfId = useAppStore((state) => state.currentPdfId);
+  const currentPdfName = useAppStore((state) => state.currentPdfName);
+  const pdfPageCount = useAppStore((state) => state.pdfPageCount);
+  const currentPage = useAppStore((state) => state.currentPage);
+  const pageTextCache = useAppStore((state) => state.pageTextCache);
 
-  // Redirect if no text
+  // Redirect if no text AND no PDF session
   useEffect(() => {
-    if (!currentText) {
+    if (!currentText && !pdfSessionId) {
       router.push("/");
     }
-  }, [currentText, router]);
+  }, [currentText, pdfSessionId, router]);
 
   // Start session tracking when page loads
   useEffect(() => {
     startSession();
   }, [startSession]);
 
-  if (!currentText) {
+  // Show loading state if we have a PDF session but haven't loaded content yet
+  if (!currentText && !pdfSessionId) {
     return null;
   }
 
@@ -101,7 +107,18 @@ export default function ReaderPage() {
             </Button>
           </div>
           <PomodoroTimer />
-          <TTSReader text={currentText} />
+          <TTSReader
+            text={
+              pdfSessionId
+                ? // For PDFs, concatenate all loaded page texts for continuous reading
+                  Object.keys(pageTextCache)
+                    .sort((a, b) => parseInt(a) - parseInt(b))
+                    .map((pageNum) => pageTextCache[parseInt(pageNum)])
+                    .filter(Boolean) // Remove any empty/undefined pages
+                    .join("\n\n") || ""
+                : currentText || ""
+            }
+          />
           <ProgressTracker />
         </div>
       </div>
@@ -134,7 +151,19 @@ export default function ReaderPage() {
                       <Switch
                         id="bionic-toggle"
                         checked={bionicEnabled}
-                        onCheckedChange={toggleBionic}
+                        onCheckedChange={(checked) => {
+                          toggleBionic();
+                          // Track feature usage
+                          fetch("/api/analytics/track", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              type: "feature",
+                              feature: "bionic_reading",
+                              enabled: checked,
+                            }),
+                          }).catch(() => {});
+                        }}
                         aria-label="Toggle bionic reading"
                       />
                     </div>
@@ -147,7 +176,19 @@ export default function ReaderPage() {
                       <Switch
                         id="focus-toggle"
                         checked={focusModeEnabled}
-                        onCheckedChange={toggleFocusMode}
+                        onCheckedChange={(checked) => {
+                          toggleFocusMode();
+                          // Track feature usage
+                          fetch("/api/analytics/track", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              type: "feature",
+                              feature: "focus_mode",
+                              enabled: checked,
+                            }),
+                          }).catch(() => {});
+                        }}
                         aria-label="Toggle focus mode"
                       />
                     </div>
@@ -179,12 +220,64 @@ export default function ReaderPage() {
                           )
                         }
                         aria-label="Select font family"
-                        className="rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="rounded-md border border-input bg-background text-foreground px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <option value="inter">Inter</option>
                         <option value="opendyslexic">OpenDyslexic</option>
                       </select>
                     </div>
+
+                    {/* PDF Display Mode (only show for PDFs) */}
+                    {pdfSessionId && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Label
+                            htmlFor="display-mode-select"
+                            className="cursor-pointer"
+                          >
+                            Display:
+                          </Label>
+                          <select
+                            id="display-mode-select"
+                            value={pdfDisplayMode}
+                            onChange={(e) =>
+                              setPdfDisplayMode(
+                                e.target.value as "text" | "image" | "both"
+                              )
+                            }
+                            aria-label="Select display mode"
+                            className="rounded-md border border-input bg-background text-foreground px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <option value="both">Both</option>
+                            <option value="text">Text Only</option>
+                            <option value="image">Image Only</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Label
+                            htmlFor="scrolling-mode-select"
+                            className="cursor-pointer"
+                          >
+                            Scrolling:
+                          </Label>
+                          <select
+                            id="scrolling-mode-select"
+                            value={pdfScrollingMode}
+                            onChange={(e) =>
+                              setPdfScrollingMode(
+                                e.target.value as "paginated" | "continuous"
+                              )
+                            }
+                            aria-label="Select scrolling mode"
+                            className="rounded-md border border-input bg-background text-foreground px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <option value="paginated">Paginated</option>
+                            <option value="continuous">Continuous</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -194,29 +287,56 @@ export default function ReaderPage() {
 
         {/* Main Reading Area */}
         <div className="spacing-relaxed flex-1 overflow-y-auto">
-          <div
-            className={cn(
-              "mx-auto max-w-4xl py-8",
-              fontFamily === "opendyslexic" && "font-dyslexic"
-            )}
-          >
-            <BionicText
-              text={currentText}
-              enabled={bionicEnabled}
-              fontFamily={fontFamily}
-              className="prose prose-lg dark:prose-invert max-w-none"
-            />
-          </div>
+          {pdfSessionId ? (
+            // PDF Reader
+            <PDFReader />
+          ) : (
+            // Regular Text Reader
+            <div
+              className={cn(
+                "mx-auto max-w-4xl py-8",
+                fontFamily === "opendyslexic" && "font-dyslexic"
+              )}
+            >
+              <BionicText
+                text={currentText}
+                enabled={bionicEnabled}
+                fontFamily={fontFamily}
+                className="prose prose-lg dark:prose-invert max-w-none"
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Panic Overlay (Focus Mode) */}
       <PanicOverlay
-        text={currentText}
+        text={pdfSessionId ? pageTextCache[currentPage] || "" : currentText}
         enabled={focusModeEnabled}
         currentSentenceIndex={currentSentenceIndex}
         onSentenceChange={setSentenceIndex}
         onClose={toggleFocusMode}
+        bionicEnabled={bionicEnabled}
+        fontFamily={fontFamily}
+        isPdf={!!pdfSessionId}
+        currentPage={currentPage}
+        pdfPageCount={pdfPageCount}
+        onPreviousPage={
+          pdfSessionId && currentPage > 1
+            ? () => {
+                setCurrentPage(currentPage - 1);
+                setSentenceIndex(0); // Reset to first sentence of new page
+              }
+            : undefined
+        }
+        onNextPage={
+          pdfSessionId && currentPage < pdfPageCount
+            ? () => {
+                setCurrentPage(currentPage + 1);
+                setSentenceIndex(0); // Reset to first sentence of new page
+              }
+            : undefined
+        }
       />
 
       {/* AI Widget (always active for text selection) */}

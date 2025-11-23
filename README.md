@@ -16,7 +16,7 @@ An accessibility-first study aid that converts hostile educational content into 
 - **AI**: Multi-Provider Free Tier Mesh
   - Groq (llama-3.1-8b-instant) - Speed layer
   - SiliconFlow (Qwen/Qwen2.5-7B-Instruct) - Volume layer
-  - Google Gemini (gemini-1.5-flash) - Vision/context layer
+  - Google Gemini (gemini-2.5-flash) - Vision/context layer
   - GitHub Models (gpt-4o) - Intelligence layer
 - **AI SDK**: Vercel AI SDK with smart routing
 - **OCR**: Tesseract.js (client-side processing)

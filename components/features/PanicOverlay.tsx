@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { transformToBionic } from "@/lib/bionic-algo";
 
 interface PanicOverlayProps {
   text: string;
@@ -12,6 +13,15 @@ interface PanicOverlayProps {
   currentSentenceIndex: number;
   onSentenceChange: (index: number) => void;
   onClose: () => void;
+  // Additional props (no longer used for controls, but for applying features)
+  bionicEnabled?: boolean;
+  fontFamily?: "inter" | "opendyslexic";
+  // PDF page navigation (optional)
+  isPdf?: boolean;
+  currentPage?: number;
+  pdfPageCount?: number;
+  onPreviousPage?: () => void;
+  onNextPage?: () => void;
 }
 
 export function PanicOverlay({
@@ -20,6 +30,13 @@ export function PanicOverlay({
   currentSentenceIndex,
   onSentenceChange,
   onClose,
+  bionicEnabled = false,
+  fontFamily = "inter",
+  isPdf = false,
+  currentPage,
+  pdfPageCount,
+  onPreviousPage,
+  onNextPage,
 }: PanicOverlayProps) {
   const [sentences, setSentences] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,7 +54,10 @@ export function PanicOverlay({
     const sentenceRegex = /[^.!?]+[.!?]+/g;
     const matches = text.match(sentenceRegex);
     setSentences(matches || [text]);
-  }, [text]);
+
+    // Reset to first sentence when text changes (e.g., new PDF page)
+    onSentenceChange(0);
+  }, [text, onSentenceChange]);
 
   // Handle arrow key navigation and Escape key
   useEffect(() => {
@@ -47,12 +67,12 @@ export function PanicOverlay({
       if (e.key === "Escape") {
         e.preventDefault();
         onClose();
-      } else if (e.key === "ArrowDown") {
+      } else if (e.key === "ArrowDown" || e.key === "ArrowRight") {
         e.preventDefault();
         onSentenceChange(
           Math.min(currentSentenceIndex + 1, sentences.length - 1)
         );
-      } else if (e.key === "ArrowUp") {
+      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
         e.preventDefault();
         onSentenceChange(Math.max(currentSentenceIndex - 1, 0));
       }
@@ -87,6 +107,10 @@ export function PanicOverlay({
   }
 
   const currentSentence = sentences[currentSentenceIndex] || sentences[0];
+  // Apply bionic transformation if enabled
+  const displaySentence = bionicEnabled
+    ? transformToBionic(currentSentence.trim())
+    : currentSentence.trim();
 
   return (
     <AnimatePresence>
@@ -127,11 +151,22 @@ export function PanicOverlay({
             className={cn(
               "max-w-2xl px-8 py-6 text-center",
               "text-2xl text-white",
-              "rounded-lg bg-white/10 backdrop-blur-sm"
+              "rounded-lg bg-white/10 backdrop-blur-sm",
+              fontFamily === "opendyslexic" && "font-dyslexic"
             )}
           >
-            <p className="text-relaxed" aria-live="polite">
-              {currentSentence.trim()}
+            <p
+              className={cn(
+                "text-relaxed",
+                fontFamily === "opendyslexic" && "font-dyslexic"
+              )}
+              aria-live="polite"
+            >
+              {bionicEnabled ? (
+                <span dangerouslySetInnerHTML={{ __html: displaySentence }} />
+              ) : (
+                displaySentence
+              )}
             </p>
             <p
               className="mt-4 text-sm text-white/60"
@@ -142,9 +177,40 @@ export function PanicOverlay({
               {currentSentenceIndex + 1} of {sentences.length}
             </p>
             <p className="mt-2 text-xs text-white/40" role="note">
-              Use ↑ ↓ arrow keys to navigate • Press ESC or click outside to
+              Use ↑ ↓ ← → arrow keys to navigate • Press ESC or click outside to
               exit
             </p>
+
+            {/* Controls Section - Only PDF Page Navigation */}
+            {isPdf &&
+              currentPage !== undefined &&
+              pdfPageCount !== undefined && (
+                <div className="mt-6 pt-6 border-t border-white/20 flex items-center justify-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onPreviousPage}
+                    disabled={currentPage <= 1}
+                    className="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-50"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-white/80 min-w-[80px]">
+                    Page {currentPage} of {pdfPageCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onNextPage}
+                    disabled={currentPage >= pdfPageCount}
+                    className="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20 disabled:opacity-50"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
           </motion.div>
         </div>
       </motion.div>

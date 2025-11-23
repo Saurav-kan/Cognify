@@ -1,4 +1,4 @@
-@import url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.1/open-dyslexic.css');
+@import url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.1/open-dyslexic.css");
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --font-opendyslexic: 'OpenDyslexic', system-ui, sans-serif;
+    --font-opendyslexic: "OpenDyslexic", system-ui, sans-serif;
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
@@ -71,6 +71,19 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     line-height: 1.75;
   }
+
+  /* Improve select and option contrast in dark mode */
+  select {
+    @apply text-foreground;
+  }
+
+  select option {
+    @apply bg-background text-foreground;
+  }
+
+  .dark select option {
+    @apply bg-card text-card-foreground;
+  }
 }
 
 /* Relaxed spacing for cognitive ease */
@@ -78,14 +91,13 @@
   .text-relaxed {
     line-height: 1.75;
   }
-  
+
   .spacing-relaxed {
     @apply max-w-4xl mx-auto px-6 py-8;
   }
-  
+
   /* Focus states for accessibility */
   .focus-visible-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 }
-

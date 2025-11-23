@@ -1,6 +1,6 @@
 /**
  * Smart Router for Multi-Provider Free Tier Mesh
- * Balances load across Groq, SiliconFlow, Google Gemini, GitHub Models, and HuggingFace
+ * Balances load across Groq, OpenRouter, Google Gemini, SiliconFlow, HuggingFace, and GitHub Models
  */
 
 export interface RouterInput {
@@ -12,7 +12,13 @@ export interface RouterInput {
 }
 
 export interface ModelSelection {
-  provider: "groq" | "siliconflow" | "gemini" | "github" | "huggingface";
+  provider:
+    | "groq"
+    | "openrouter"
+    | "gemini"
+    | "siliconflow"
+    | "huggingface"
+    | "github";
   modelId: string;
   baseUrl?: string;
   reason: string;
@@ -31,38 +37,43 @@ export function selectModel(input: RouterInput): ModelSelection {
   if (hasImage || wordCount > 10000 || input.text.length > 50000) {
     return {
       provider: "gemini",
-      modelId: "gemini-1.5-flash",
-      reason: "Large context or image input - Gemini handles 1M tokens and vision",
+      modelId: "gemini-2.5-flash",
+      reason:
+        "Large context or image input - Gemini handles 1M tokens and vision",
     };
   }
 
-  // Strategy 2: Complex reasoning -> Try GitHub GPT-4o, fallback to HuggingFace/SiliconFlow
+  // Strategy 2: Complex reasoning -> HuggingFace (OpenRouter only as last resort due to 50/day limit)
   if (taskType === "complex_reasoning") {
-    // Use HuggingFace for complex reasoning (good free tier models)
+    // Use HuggingFace for complex reasoning (better free tier than OpenRouter's 50/day)
     return {
       provider: "huggingface",
       modelId: "meta-llama/Llama-3.1-8B-Instruct",
-      baseUrl: "https://api-inference.huggingface.co/v1",
-      reason: "Complex reasoning task - Using HuggingFace Llama model",
+      baseUrl: "https://router.huggingface.co/v1",
+      reason:
+        "Complex reasoning task - HuggingFace has generous free tier limits",
     };
   }
 
-  // Strategy 3: Long conversation history -> SiliconFlow (high TPM)
+  // Note: OpenRouter model default is x-ai/grok-4.1-fast:free (configured via OPENROUTER_MODEL env var)
+
+  // Strategy 3: Long conversation history -> SiliconFlow (high RPM, better than OpenRouter's 50/day)
   if (historyLength > 10) {
     return {
       provider: "siliconflow",
-      modelId: "Qwen/Qwen2.5-7B-Instruct",
-      baseUrl: "https://api.siliconflow.cn/v1",
-      reason: "Long conversation history - SiliconFlow has 500K TPM capacity",
+      modelId: "tencent/Hunyuan-MT-7B",
+      baseUrl: "https://api.siliconflow.com/v1",
+      reason: "Long conversation history - SiliconFlow has 1K RPM capacity",
     };
   }
 
-  // Strategy 4: Default -> Groq (fastest for short interactions)
+  // Strategy 4: Default -> SiliconFlow (1K RPM vs Groq's 30 RPM, better for high volume)
   return {
-    provider: "groq",
-    modelId: "llama-3.1-8b-instant",
-    baseUrl: "https://api.groq.com/openai/v1",
-    reason: "Short interaction - Groq provides instant latency (~0.2s)",
+    provider: "siliconflow",
+    modelId: "tencent/Hunyuan-MT-7B",
+    baseUrl: "https://api.siliconflow.com/v1",
+    reason:
+      "Short interaction - SiliconFlow provides 1K RPM (vs Groq's 30 RPM) for better throughput",
   };
 }
 
@@ -77,11 +88,26 @@ export const COMPRESSED_SYSTEM_PROMPT =
  */
 export function getOptimizedHistory(
   history: Array<{ role: string; content: string }>,
-  provider: "groq" | "siliconflow" | "gemini" | "github" | "huggingface"
+  provider:
+    | "groq"
+    | "openrouter"
+    | "gemini"
+    | "siliconflow"
+    | "huggingface"
+    | "github"
 ): Array<{ role: string; content: string }> {
-  // Groq, SiliconFlow, and HuggingFace: Only last 6 messages (rolling window)
-  if (provider === "groq" || provider === "siliconflow" || provider === "huggingface") {
+  // Groq, SiliconFlow, HuggingFace: Only last 6 messages (rolling window)
+  if (
+    provider === "groq" ||
+    provider === "siliconflow" ||
+    provider === "huggingface"
+  ) {
     return history.slice(-6);
+  }
+
+  // OpenRouter: Can handle longer history, use last 10 messages
+  if (provider === "openrouter") {
+    return history.slice(-10);
   }
 
   // Gemini: Can handle full history (1M token window)
@@ -104,4 +130,3 @@ export function shouldUseScreenshotHack(wordCount: number): boolean {
   // If text > 1000 words, screenshot hack saves ~80% tokens
   return wordCount > 1000;
 }
-

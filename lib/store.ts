@@ -25,6 +25,12 @@ interface AppState {
   currentPdfId: string | null;
   currentPdfName: string | null;
   pdfPageCount: number;
+  currentPage: number;
+  pageTextCache: { [page: number]: string };
+  pageImageCache: { [page: number]: string };
+  pageSummaryCache: { [page: number]: string };
+  pdfDisplayMode: "text" | "image" | "both";
+  pdfScrollingMode: "paginated" | "continuous";
   // Actions
   setText: (text: string) => void;
   toggleBionic: () => void;
@@ -52,6 +58,12 @@ interface AppState {
     pageCount: number;
   }) => void;
   clearPdfSession: () => void;
+  setCurrentPage: (page: number) => void;
+  setPageText: (page: number, text: string) => void;
+  setPageImage: (page: number, imageData: string) => void;
+  setPageSummary: (page: number, summary: string) => void;
+  setPdfDisplayMode: (mode: "text" | "image" | "both") => void;
+  setPdfScrollingMode: (mode: "paginated" | "continuous") => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -79,6 +91,12 @@ export const useAppStore = create<AppState>()(
       currentPdfId: null,
       currentPdfName: null,
       pdfPageCount: 0,
+      currentPage: 1,
+      pageTextCache: {},
+      pageImageCache: {},
+      pageSummaryCache: {},
+      pdfDisplayMode: "both",
+      pdfScrollingMode: "paginated",
       // Actions
       setText: (text) => set({ currentText: text }),
       toggleBionic: () =>
@@ -153,7 +171,15 @@ export const useAppStore = create<AppState>()(
           currentPdfId: pdfId,
           currentPdfName: name,
           pdfPageCount: pageCount,
+          currentPage: 1,
           currentText: "",
+          pageTextCache: {},
+          pageImageCache: {},
+          pageSummaryCache: {},
+          pdfDisplayMode: "both",
+          pdfScrollingMode: "paginated",
+          readSections: new Set(),
+          readingProgress: 0,
         }),
       clearPdfSession: () =>
         set({
@@ -161,7 +187,26 @@ export const useAppStore = create<AppState>()(
           currentPdfId: null,
           currentPdfName: null,
           pdfPageCount: 0,
+          currentPage: 1,
+          pageTextCache: {},
+          pageImageCache: {},
+          pageSummaryCache: {},
         }),
+      setCurrentPage: (page) => set({ currentPage: page }),
+      setPageText: (page, text) =>
+        set((state) => ({
+          pageTextCache: { ...state.pageTextCache, [page]: text },
+        })),
+      setPageImage: (page, imageData) =>
+        set((state) => ({
+          pageImageCache: { ...state.pageImageCache, [page]: imageData },
+        })),
+      setPageSummary: (page, summary) =>
+        set((state) => ({
+          pageSummaryCache: { ...state.pageSummaryCache, [page]: summary },
+        })),
+      setPdfDisplayMode: (mode) => set({ pdfDisplayMode: mode }),
+      setPdfScrollingMode: (mode) => set({ pdfScrollingMode: mode }),
     }),
     {
       name: "current_session",

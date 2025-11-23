@@ -37,3 +37,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# documentation/analysis markdown files
+CAPACITY_ANALYSIS.md
+QUEUE_ISSUES_FOUND.md
+LOCAL_TESTING.md
+CHINESE_MODELS_GUIDE.md
+STRESS_TEST_GUIDE.md
+OPENROUTER_GUIDE.md
+PROVIDER_STATUS.md
+TEST_RESULTS.md
+OPTIMIZATIONS.md
+*.plan.md
+

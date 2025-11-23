@@ -2,7 +2,13 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Loader2, FileInput, FileWarning } from "lucide-react";
@@ -27,16 +33,30 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
   const setPdfSession = useAppStore((state) => state.setPdfSession);
   const clearPdfSession = useAppStore((state) => state.clearPdfSession);
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    console.log("[PDF Upload] File select triggered");
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log("[PDF Upload] No file selected");
+      return;
+    }
+
+    console.log("[PDF Upload] File selected:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    });
 
     if (file.type !== "application/pdf") {
+      console.warn("[PDF Upload] Invalid file type:", file.type);
       setError("Please upload a PDF file.");
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
+      console.warn("[PDF Upload] File too large:", file.size);
       setError(`File size must be less than ${MAX_FILE_SIZE / 1024 / 1024}MB.`);
       return;
     }
@@ -47,9 +67,15 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
     setPageCount(null);
 
     try {
+      console.log("[PDF Upload] Converting file to ArrayBuffer...");
       const arrayBuffer = await file.arrayBuffer();
+      console.log(
+        "[PDF Upload] ✅ ArrayBuffer created, size:",
+        arrayBuffer.byteLength
+      );
 
       if (currentPdfId) {
+        console.log("[PDF Upload] Releasing previous PDF:", currentPdfId);
         releasePdf(currentPdfId);
         clearPdfSession();
       }
@@ -57,18 +83,30 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
       const pdfId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
-          : `pdf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+          : `pdf-${Date.now().toString(36)}-${Math.random()
+              .toString(36)
+              .slice(2)}`;
 
-      const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const sessionId = `${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+
+      console.log("[PDF Upload] PDF ID:", pdfId);
+      console.log("[PDF Upload] Session ID:", sessionId);
+      console.log("[PDF Upload] Calling loadPdfFromArrayBuffer...");
 
       const { pageCount } = await loadPdfFromArrayBuffer(arrayBuffer, pdfId);
 
+      console.log("[PDF Upload] ✅ PDF loaded successfully, pages:", pageCount);
+
+      console.log("[PDF Upload] Setting PDF session in store...");
       setPdfSession({
         pdfId,
         sessionId,
         name: file.name,
         pageCount,
       });
+      console.log("[PDF Upload] ✅ Session set in store");
 
       setPageCount(pageCount);
 
@@ -77,15 +115,38 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
       }
 
       if (onPdfReady) {
+        console.log("[PDF Upload] Calling onPdfReady callback...");
         onPdfReady(sessionId);
       } else {
+        console.log("[PDF Upload] Navigating to reader page...");
         router.push(`/reader/${sessionId}`);
       }
     } catch (err) {
+      console.error("[PDF Upload] ❌ Error processing PDF:", err);
+      console.error("[PDF Upload] Error details:", {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        name: err instanceof Error ? err.name : undefined,
+        toString: err?.toString(),
+      });
+
+      // Log full error object
+      if (err instanceof Error) {
+        console.error("[PDF Upload] Full error object:", {
+          message: err.message,
+          stack: err.stack,
+          name: err.name,
+          cause: (err as any).cause,
+        });
+      }
+
       const message =
-        err instanceof Error ? err.message : "Failed to process PDF. Please try again.";
+        err instanceof Error
+          ? err.message
+          : "Failed to process PDF. Please try again.";
       setError(message);
     } finally {
+      console.log("[PDF Upload] Processing complete");
       setIsProcessing(false);
     }
   };
@@ -113,7 +174,9 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
             disabled={isProcessing}
             className="cursor-pointer"
           />
-          <p className="text-xs text-muted-foreground">Supported format: PDF (Max 25MB)</p>
+          <p className="text-xs text-muted-foreground">
+            Supported format: PDF (Max 25MB)
+          </p>
         </div>
 
         {isProcessing && (
@@ -142,4 +205,3 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
     </Card>
   );
 }
-
