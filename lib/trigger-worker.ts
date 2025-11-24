@@ -10,6 +10,13 @@ export function triggerWorker() {
     : "http://localhost:3000/api/cron/worker";
 
   const cronSecret = process.env.CRON_SECRET;
+  
+  console.log(`[Trigger] Secret available: ${!!cronSecret}`);
+  if (cronSecret) {
+     console.log(`[Trigger] Secret prefix: ${cronSecret.substring(0, 4)}...`);
+  } else {
+     console.error("[Trigger] ❌ CRON_SECRET is missing in environment variables!");
+  }
 
   console.log("[Trigger] 🚀 Triggering background worker...");
 
