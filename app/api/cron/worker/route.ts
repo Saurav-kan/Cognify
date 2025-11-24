@@ -20,6 +20,9 @@ export async function GET(req: Request) {
     }
   }
 
+  const source = req.headers.get("x-trigger-source") || "cron";
+  console.log(`[Worker] 🔔 Triggered by: ${source}`);
+
   try {
     const results = await runWorker();
     return Response.json({

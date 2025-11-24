@@ -18,6 +18,7 @@ export function triggerWorker() {
     fetch(workerUrl, {
       headers: {
         Authorization: `Bearer ${cronSecret}`,
+        "X-Trigger-Source": "instant",
       },
     })
       .then((res) => {
