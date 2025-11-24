@@ -7,7 +7,9 @@ import { enqueueJob, isQueueAvailable } from "@/backend/queue/queue";
 import { ExplainJobData } from "@/backend/queue/jobs";
 import { trackApiCall } from "@/lib/analytics";
 
-export const runtime = "edge";
+import { triggerWorker } from "@/lib/trigger-worker";
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,6 +122,9 @@ export async function POST(req: NextRequest) {
         };
 
         await enqueueJob("explain", jobData);
+
+        // 🚀 Trigger worker immediately (fire and forget)
+        triggerWorker();
 
         // Return job ID and status endpoint
         return new Response(

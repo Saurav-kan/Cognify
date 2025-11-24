@@ -13,7 +13,9 @@ import { enqueueJob, isQueueAvailable } from "@/backend/queue/queue";
 import { SummarizeBatchJobData } from "@/backend/queue/jobs";
 import { trackApiCall } from "@/lib/analytics";
 
-export const runtime = "edge";
+import { triggerWorker } from "@/lib/trigger-worker";
+
+export const runtime = "nodejs";
 
 interface BatchPage {
   pageNumber: number;
@@ -136,6 +138,9 @@ export async function POST(req: NextRequest) {
 
       await enqueueJob("summarize-batch", jobData);
 
+      // 🚀 Trigger worker immediately (fire and forget)
+      triggerWorker();
+
       // Return job ID and status endpoint
       return new Response(
         JSON.stringify({
@@ -156,8 +161,19 @@ export async function POST(req: NextRequest) {
 
     // Fallback to direct processing if queue not available
     // Always use Gemini for batch processing (1M token window)
-    let modelSelection = {
-      provider: "gemini" as const,
+    let modelSelection: {
+      provider:
+        | "gemini"
+        | "groq"
+        | "openrouter"
+        | "siliconflow"
+        | "huggingface"
+        | "github";
+      modelId: string;
+      reason: string;
+      baseUrl?: string;
+    } = {
+      provider: "gemini",
       modelId: "gemini-2.5-flash",
       reason:
         "Batch processing - Gemini has 1M token window for multiple pages",
