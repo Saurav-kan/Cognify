@@ -12,10 +12,17 @@ export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   
+  // Debug Auth
+  const expectedPrefix = cronSecret ? cronSecret.substring(0, 4) + "..." : "UNDEFINED";
+  const receivedAuth = authHeader ? authHeader.substring(0, 15) + "..." : "NONE";
+  console.log(`[Worker] Auth Check - Expected Secret Prefix: ${expectedPrefix}`);
+  console.log(`[Worker] Auth Check - Received Header: ${receivedAuth}`);
+
   // In development, allow access without secret or with any secret
   // In production, require CRON_SECRET
   if (process.env.NODE_ENV === "production" && cronSecret) {
     if (authHeader !== `Bearer ${cronSecret}`) {
+      console.error(`[Worker] ❌ Auth Failed! Mismatch.`);
       return new Response("Unauthorized", { status: 401 });
     }
   }
@@ -41,4 +48,3 @@ export async function GET(req: Request) {
     );
   }
 }
-

@@ -18,7 +18,8 @@ export function triggerWorker() {
      console.error("[Trigger] ❌ CRON_SECRET is missing in environment variables!");
   }
 
-  console.log("[Trigger] 🚀 Triggering background worker...");
+  console.log(`[Trigger] 🚀 Triggering background worker at: ${workerUrl}`);
+  console.log(`[Trigger] Sending Secret Prefix: ${cronSecret ? cronSecret.substring(0, 4) + "..." : "UNDEFINED"}`);
 
   // Fire and forget (but keep alive with waitUntil)
   waitUntil(
