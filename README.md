@@ -1,5 +1,16 @@
-# NeuroFocus Study Tool
 
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white)
+![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white)
+
+An accessibility-first study aid that converts "hostile" educational content into neuro-friendly formats. NeuroFocus utilizes a custom multi-model AI mesh to provide bionic reading, cognitive load management, and context-aware summarization without infrastructure costs.
+
+## 🏗 System Architecture
+
+NeuroFocus utilizes a **client-side logic mesh** to route prompts based on task complexity, creating a resilient "Free Tier Mesh" that maximizes throughput.
+    
 An accessibility-first study aid that converts hostile educational content into neuro-friendly formats using bionic reading, AI summarization, and gamified chunking.
 
 ## Features
@@ -9,13 +20,17 @@ An accessibility-first study aid that converts hostile educational content into 
 - **Jargon Crusher**: Highlight complex terms to get simple, contextual explanations using AI
 - **PDF Un-Breaker (OCR)**: Upload images of textbooks to extract and process text
 
+## System Architecture
+
+<img width="570" height="367" alt="image" src="https://github.com/user-attachments/assets/66739ffe-250e-4e31-b732-be9e9f3ff6b8" />
+
 ## Tech Stack
 
 - **Framework**: Next.js 14+ (App Router) with TypeScript
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **AI**: Multi-Provider Free Tier Mesh
   - Groq (llama-3.1-8b-instant) - Speed layer
-  - SiliconFlow (tencent/Hunyuan-MT-7B) - Volume layer
+  - SiliconFlow (Qwen/Qwen2.5-7B-Instruct) - Volume layer
   - Google Gemini (gemini-2.0-flash-lite) - Vision/context layer
   - GitHub Models (gpt-4o) - Intelligence layer
 - **AI SDK**: Vercel AI SDK with smart routing
@@ -130,7 +145,8 @@ This project uses a **multi-provider free tier mesh** to balance load across mul
 - **`SILICONFLOW_API_KEY`**: SiliconFlow API key (Volume Layer - best throughput)
 
   - Get from: https://siliconflow.cn/
-  - Free tier: 1,000 RPM, 500,000 TPM
+  - Free tier: 1,000 RPM, 80,000 TPM
+  - Time Sensisitve Free Teir: 1,000 RPM, 1,000,000 TPM
   - **Optional**: App works without this - will use other available providers
 
 - **`HUGGINGFACE_API_KEY`**: HuggingFace API key (Alternative Layer - good free tier models)
@@ -143,6 +159,7 @@ This project uses a **multi-provider free tier mesh** to balance load across mul
 
   - Get from: https://aistudio.google.com/app/apikey
   - Free tier: 30 RPM, 1,000,000 TPM (handles images & long context)
+    
 
 - **`GITHUB_TOKEN`**: GitHub token (Intelligence Layer - best reasoning)
   - Get from: https://github.com/settings/tokens
@@ -190,7 +207,7 @@ This project is designed for deployment on Vercel:
 ### Free Tier Limits (Combined)
 
 - **Groq**: 30 RPM, 6,000 TPM
-- **SiliconFlow**: 1,000 RPM, 500,000 TPM
+- **SiliconFlow**: 1,000 RPM, 80,000 TPM
 - **HuggingFace**: Generous free tier limits
 - **Google Gemini**: 30 RPM, 1,000,000 TPM
 - **GitHub**: 50 requests/day
