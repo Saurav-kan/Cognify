@@ -60,6 +60,60 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
+
+  .grey {
+    --background: 220 14% 96%; /* Slate 50 */
+    --foreground: 220 10% 10%; /* Slate 900 */
+    --card: 220 14% 94%;
+    --card-foreground: 220 10% 10%;
+    --popover: 220 14% 96%;
+    --popover-foreground: 220 10% 10%;
+    --primary: 220 10% 20%;
+    --primary-foreground: 220 14% 96%;
+    --secondary: 220 10% 90%;
+    --secondary-foreground: 220 10% 20%;
+    --muted: 220 10% 90%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 220 10% 90%;
+    --accent-foreground: 220 10% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 10% 85%;
+    --input: 220 10% 85%;
+    --ring: 220 10% 20%;
+    --chart-1: 220 60% 50%;
+    --chart-2: 160 50% 40%;
+    --chart-3: 200 50% 40%;
+    --chart-4: 280 50% 50%;
+    --chart-5: 340 60% 50%;
+  }
+
+  .dim {
+    --background: 220 15% 12%; /* Slate 900-ish */
+    --foreground: 220 10% 90%;
+    --card: 220 15% 14%;
+    --card-foreground: 220 10% 90%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 220 10% 90%;
+    --primary: 220 10% 90%;
+    --primary-foreground: 220 15% 12%;
+    --secondary: 220 10% 20%;
+    --secondary-foreground: 220 10% 90%;
+    --muted: 220 10% 20%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 220 10% 20%;
+    --accent-foreground: 220 10% 90%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 10% 20%;
+    --input: 220 10% 20%;
+    --ring: 220 10% 80%;
+    --chart-1: 220 60% 50%;
+    --chart-2: 160 50% 45%;
+    --chart-3: 30 70% 55%;
+    --chart-4: 280 55% 60%;
+    --chart-5: 340 65% 55%;
+  }
 }
 
 @layer base {
@@ -87,6 +141,7 @@
 }
 
 /* Relaxed spacing for cognitive ease */
+/* Relaxed spacing for cognitive ease */
 @layer utilities {
   .text-relaxed {
     line-height: 1.75;
@@ -100,4 +155,110 @@
   .focus-visible-ring {
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
+
+  /* Glassmorphism utility */
+  .glass-panel {
+    @apply bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-xl;
+  }
+
+  .dim .glass-panel {
+    @apply bg-slate-900/60 border-white/5;
+  }
+
+  .grey .glass-panel {
+    @apply bg-slate-100/60 border-slate-200/50;
+  }
+
+  /* Animations */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 1s ease-out forwards;
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Subtle background gradient - Default (Light) & Dark */
+body {
+  background-attachment: fixed;
+}
+
+:root:not(.grey):not(.dim) body {
+  background-image: radial-gradient(
+      circle at 50% 0%,
+      rgba(120, 119, 198, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 0% 50%,
+      rgba(56, 189, 248, 0.05) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 100% 50%,
+      rgba(236, 72, 153, 0.05) 0%,
+      transparent 50%
+    );
+}
+
+/* Dim Theme Gradient - Subtle Blue/Grey */
+.dim body {
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(56, 189, 248, 0.03) 0%,
+    transparent 50%
+  );
+}
+
+/* Grey Theme Gradient - Cool Neutral */
+.grey body {
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(148, 163, 184, 0.1) 0%,
+    transparent 50%
+  );
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }

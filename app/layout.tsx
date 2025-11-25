@@ -4,9 +4,9 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GlobalErrorHandler } from "@/components/GlobalErrorHandler";
-import { DarkModeProvider } from "@/components/DarkModeProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppUsageBar } from "@/components/AppUsageBar";
-import { MeshStatus } from "@/components/features/MeshStatus";
+
 
 const inter = Inter({
   subsets: ["latin"],
@@ -28,10 +28,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn(inter.variable, "font-sans antialiased")}>
-        <DarkModeProvider />
+        <ThemeProvider />
         <GlobalErrorHandler />
         <AppUsageBar />
-        <MeshStatus />
+
         <ErrorBoundary>{children}</ErrorBoundary>
       </body>
     </html>

@@ -7,7 +7,8 @@ interface AppState {
   focusModeEnabled: boolean;
   currentSentenceIndex: number;
   fontFamily: "inter" | "opendyslexic";
-  darkMode: boolean;
+  fontFamily: "inter" | "opendyslexic";
+  theme: "light" | "dark" | "grey" | "dim";
   // ADHD-friendly features
   pomodoroEnabled: boolean;
   pomodoroWorkMinutes: number;
@@ -37,7 +38,7 @@ interface AppState {
   toggleFocusMode: () => void;
   setSentenceIndex: (index: number) => void;
   setFontFamily: (font: "inter" | "opendyslexic") => void;
-  toggleDarkMode: () => void;
+  setTheme: (theme: "light" | "dark" | "grey" | "dim") => void;
   togglePomodoro: () => void;
   setPomodoroWorkMinutes: (minutes: number) => void;
   setPomodoroBreakMinutes: (minutes: number) => void;
@@ -74,7 +75,7 @@ export const useAppStore = create<AppState>()(
       focusModeEnabled: false,
       currentSentenceIndex: 0,
       fontFamily: "inter",
-      darkMode: false,
+      theme: "light",
       // ADHD-friendly features
       pomodoroEnabled: false,
       pomodoroWorkMinutes: 25,
@@ -105,7 +106,7 @@ export const useAppStore = create<AppState>()(
         set((state) => ({ focusModeEnabled: !state.focusModeEnabled })),
       setSentenceIndex: (index) => set({ currentSentenceIndex: index }),
       setFontFamily: (font) => set({ fontFamily: font }),
-      toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+      setTheme: (theme) => set({ theme }),
       togglePomodoro: () =>
         set((state) => {
           const newEnabled = !state.pomodoroEnabled;
@@ -216,13 +217,29 @@ export const useAppStore = create<AppState>()(
         readSections: Array.from(state.readSections),
       }),
       // Custom deserialization for Set
-      merge: (persistedState: any, currentState: AppState) => ({
-        ...currentState,
-        ...persistedState,
-        readSections: persistedState?.readSections
-          ? new Set(persistedState.readSections)
-          : new Set<string>(),
-      }),
+      merge: (persistedState: any, currentState: AppState) => {
+        // Handle migration from darkMode boolean to theme string
+        let theme = currentState.theme;
+        if (persistedState && 'darkMode' in persistedState) {
+          theme = persistedState.darkMode ? 'dark' : 'light';
+        }
+        if (persistedState && 'theme' in persistedState) {
+          theme = persistedState.theme;
+          // Migrate sepia to grey
+          if (theme === 'sepia') {
+            theme = 'grey';
+          }
+        }
+
+        return {
+          ...currentState,
+          ...persistedState,
+          theme,
+          readSections: persistedState?.readSections
+            ? new Set(persistedState.readSections)
+            : new Set<string>(),
+        };
+      },
     }
   )
 );

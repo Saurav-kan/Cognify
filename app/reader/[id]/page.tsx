@@ -9,6 +9,7 @@ import { PomodoroTimer } from "@/components/features/PomodoroTimer";
 import { ProgressTracker } from "@/components/features/ProgressTracker";
 import { TTSReader } from "@/components/features/TTSReader";
 import { PDFReader } from "@/components/features/PDFReader";
+import { ThemeSelector } from "@/components/features/ThemeSelector";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,14 +32,12 @@ export default function ReaderPage() {
     focusModeEnabled,
     currentSentenceIndex,
     fontFamily,
-    darkMode,
     pdfDisplayMode,
     pdfScrollingMode,
     toggleBionic,
     toggleFocusMode,
     setSentenceIndex,
     setFontFamily,
-    toggleDarkMode,
     setPdfDisplayMode,
     setPdfScrollingMode,
     startSession,
@@ -90,7 +89,7 @@ export default function ReaderPage() {
       {/* Sidebar with ADHD Tools */}
       <div
         className={cn(
-          "border-r bg-card transition-all duration-300 overflow-y-auto",
+          "border-r bg-card transition-all duration-300 overflow-y-auto sticky top-0 h-screen",
           sidebarOpen ? "w-80" : "w-0"
         )}
       >
@@ -193,17 +192,10 @@ export default function ReaderPage() {
                       />
                     </div>
 
-                    {/* Dark Mode Toggle */}
+                    {/* Theme Selector */}
                     <div className="flex items-center gap-2">
-                      <Label htmlFor="dark-toggle" className="cursor-pointer">
-                        Dark Mode
-                      </Label>
-                      <Switch
-                        id="dark-toggle"
-                        checked={darkMode}
-                        onCheckedChange={toggleDarkMode}
-                        aria-label="Toggle dark mode"
-                      />
+                      <Label className="cursor-pointer">Theme:</Label>
+                      <ThemeSelector />
                     </div>
 
                     {/* Font Selector */}
@@ -286,7 +278,7 @@ export default function ReaderPage() {
         </div>
 
         {/* Main Reading Area */}
-        <div className="spacing-relaxed flex-1 overflow-y-auto">
+        <div className="spacing-relaxed flex-1">
           {pdfSessionId ? (
             // PDF Reader
             <PDFReader />

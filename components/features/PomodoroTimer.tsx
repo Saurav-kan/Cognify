@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Play, Pause, RotateCcw, Coffee } from "lucide-react";
+import { Play, Pause, RotateCcw, Coffee, SkipForward } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function PomodoroTimer() {
@@ -97,6 +97,15 @@ export function PomodoroTimer() {
     setIsRunning(false);
     setPomodoroTimeRemaining(
       pomodoroIsBreak ? pomodoroBreakMinutes * 60 : pomodoroWorkMinutes * 60
+    );
+  };
+
+  const handleSkip = () => {
+    setIsRunning(false);
+    const newIsBreak = !pomodoroIsBreak;
+    setPomodoroIsBreak(newIsBreak);
+    setPomodoroTimeRemaining(
+      newIsBreak ? pomodoroBreakMinutes * 60 : pomodoroWorkMinutes * 60
     );
   };
 
@@ -199,6 +208,7 @@ export function PomodoroTimer() {
                 <Play className="h-4 w-4" />
               )}
             </Button>
+
             <Button
               variant="outline"
               size="icon"
@@ -253,6 +263,15 @@ export function PomodoroTimer() {
                     />
                   </div>
                 </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleSkip}
+                >
+                  <SkipForward className="h-4 w-4 mr-2" />
+                  {pomodoroIsBreak ? "Skip to Focus" : "Skip to Break"}
+                </Button>
               </motion.div>
             )}
           </AnimatePresence>

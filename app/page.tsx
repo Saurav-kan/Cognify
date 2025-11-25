@@ -12,6 +12,8 @@ import { useAppStore } from "@/lib/store";
 import { sanitizeText } from "@/lib/utils";
 import { BookOpen, Upload } from "lucide-react";
 
+
+
 export default function HomePage() {
   const [text, setText] = useState("");
   const router = useRouter();
@@ -72,58 +74,62 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="spacing-relaxed">
-        <header className="mb-8 text-center">
-          <h1 className="mb-2 text-4xl font-bold tracking-tight">
-            NeuroFocus Study Tool
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="spacing-relaxed w-full max-w-4xl mx-auto animate-fade-in-up">
+        <header className="mb-12 text-center space-y-4">
+          <div className="inline-block p-3 rounded-2xl glass-panel mb-4 shadow-sm">
+            <BookOpen className="h-10 w-10 text-primary" />
+          </div>
+          <h1 className="text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 grey:from-slate-700 grey:to-slate-500 dim:from-blue-100 dim:to-slate-400">
+            NeuroFocus
           </h1>
-          <p className="text-lg text-muted-foreground">
-            Convert educational content into neuro-friendly formats
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            Transform complex study materials into neuro-friendly formats with AI-powered tools.
           </p>
         </header>
 
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="grid gap-8 md:grid-cols-2">
           {/* PDF Upload Section */}
-          <PDFUpload onPdfReady={handlePdfReady} />
+          <div className="glass-panel rounded-xl p-1 delay-100 animate-fade-in-up" style={{ animationFillMode: 'both' }}>
+            <PDFUpload onPdfReady={handlePdfReady} />
+          </div>
 
           {/* OCR Upload Section */}
-          <OCRUpload onTextExtracted={handleTextExtracted} />
+          <div className="glass-panel rounded-xl p-1 delay-200 animate-fade-in-up" style={{ animationFillMode: 'both' }}>
+            <OCRUpload onTextExtracted={handleTextExtracted} />
+          </div>
 
-          {/* Text Input Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5" />
-                Or Paste Your Text
-              </CardTitle>
-              <CardDescription>
-                Paste your study material here to get started
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="text-input">Your Text</Label>
+          {/* Text Input Section - Spans full width */}
+          <div className="md:col-span-2 glass-panel rounded-xl p-1 delay-300 animate-fade-in-up" style={{ animationFillMode: 'both' }}>
+             <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  Paste Text
+                </CardTitle>
+                <CardDescription>
+                  Directly paste text to read
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <Textarea
                   id="text-input"
                   placeholder="Paste your text here..."
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  className="min-h-[200px] text-relaxed"
+                  className="min-h-[120px] resize-none"
                 />
-              </div>
-              <Button
-                onClick={handleStartReading}
-                disabled={!text.trim()}
-                className="w-full"
-                size="lg"
-                aria-label="Start reading session with the entered text"
-              >
-                <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
-                Start Reading
-              </Button>
-            </CardContent>
-          </Card>
+                <Button
+                  onClick={handleStartReading}
+                  disabled={!text.trim()}
+                  className="w-full bg-primary/90 hover:bg-primary transition-all shadow-lg hover:shadow-primary/25"
+                  size="lg"
+                >
+                  Start Reading
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

@@ -11,6 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Play, Pause, Square, Volume2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface TTSReaderProps {
@@ -28,6 +30,8 @@ export function TTSReader({ text }: TTSReaderProps) {
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [rate, setRate] = useState(1.0);
+  const [localRate, setLocalRate] = useState(1.0);
+  const [autoScroll, setAutoScroll] = useState(true);
   const [pitch, setPitch] = useState(1.0);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>("");
@@ -164,15 +168,14 @@ export function TTSReader({ text }: TTSReaderProps) {
     // If TTS is playing and text changed (e.g., new page loaded), update utterance
     if (isPlaying && utteranceRef.current && text) {
       const synth = window.speechSynthesis;
-      const currentCharIndex = utteranceRef.current.charIndex || 0;
       
-      // Find the current word index in the new text map
+      // Attempt to keep position based on word index
+      // Note: We can't get precise charIndex from utterance object
       let newWordIndex = currentWordIndex;
-      for (const [wordIdx, wordData] of textToWordsMapRef.current.entries()) {
-        if (currentCharIndex >= wordData.charStart && currentCharIndex < wordData.charEnd) {
-          newWordIndex = wordIdx;
-          break;
-        }
+      
+      // Clamp to new length
+      if (newWordIndex >= words.length) {
+        newWordIndex = Math.max(0, words.length - 1);
       }
 
       // If the text got longer (new page added), continue with updated utterance
@@ -180,7 +183,8 @@ export function TTSReader({ text }: TTSReaderProps) {
       // so we'll let it continue and the word map will handle the new words
       setCurrentWordIndex(newWordIndex);
     }
-  }, [text, isPlaying, currentWordIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
 
   const isSupported =
     typeof window !== "undefined" && "speechSynthesis" in window;
@@ -221,6 +225,19 @@ export function TTSReader({ text }: TTSReaderProps) {
     }
   }, [isSupported, selectedVoice]);
 
+  // Update speech when settings change
+  useEffect(() => {
+    if (isPlaying && !isPaused) {
+      handlePlay(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rate, pitch, selectedVoice]);
+
+  // Sync local rate with rate
+  useEffect(() => {
+    setLocalRate(rate);
+  }, [rate]);
+
   // Highlight current word
   useEffect(() => {
     if (!isPlaying && !isPaused) {
@@ -253,7 +270,7 @@ export function TTSReader({ text }: TTSReaderProps) {
         const rect = section.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
         const isVisible = rect.top >= 0 && rect.bottom <= viewportHeight;
-        if (!isVisible) {
+        if (!isVisible && autoScroll) {
           section.scrollIntoView({ behavior: "smooth", block: "center" });
         }
 
@@ -590,9 +607,15 @@ export function TTSReader({ text }: TTSReaderProps) {
         }
       }
     }
-  }, [currentWordIndex, isPlaying, isPaused]);
+  }, [currentWordIndex, isPlaying, isPaused, autoScroll]);
 
-  const handlePlay = () => {
+  const charOffsetRef = useRef(0);
+
+  // ... (existing refs)
+
+  // ... (existing useEffects)
+
+  const handlePlay = (fromCurrentPosition = false) => {
     if (!isSupported) {
       console.warn("[TTSReader] Speech synthesis not supported in this browser");
       return;
@@ -602,16 +625,33 @@ export function TTSReader({ text }: TTSReaderProps) {
       return;
     }
 
-    if (isPaused && utteranceRef.current) {
-      // Resume
+    // If just resuming from pause and not changing settings
+    if (isPaused && utteranceRef.current && !fromCurrentPosition) {
       window.speechSynthesis.resume();
       setIsPaused(false);
       setIsPlaying(true);
       return;
     }
 
+    // Cancel any current speech
+    window.speechSynthesis.cancel();
+
+    // Calculate start position
+    let textToSpeak = text;
+    let startCharOffset = 0;
+
+    if (fromCurrentPosition && currentWordIndex > 0) {
+      const wordData = textToWordsMapRef.current.get(currentWordIndex);
+      if (wordData) {
+        startCharOffset = wordData.charStart;
+        textToSpeak = text.substring(startCharOffset);
+      }
+    }
+
+    charOffsetRef.current = startCharOffset;
+
     // Create new utterance
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.rate = rate;
     utterance.pitch = pitch;
     utterance.lang = "en-US";
@@ -625,12 +665,12 @@ export function TTSReader({ text }: TTSReaderProps) {
 
     let wordIndex = 0;
     let currentSection: string | null = null;
-    const sectionWordCounts = new Map<string, number>(); // Track words read per section
+    const sectionWordCounts = new Map<string, number>();
 
     utterance.onboundary = (event) => {
       if (event.name === "word") {
-        // Use character index to find the word
-        const charIndex = event.charIndex;
+        // Use character index + offset to find the word in the original text
+        const charIndex = event.charIndex + charOffsetRef.current;
 
         // Find the word that contains this character index
         let foundWordIndex = -1;
@@ -658,6 +698,13 @@ export function TTSReader({ text }: TTSReaderProps) {
           foundWordIndex = closestIndex;
         }
 
+        // Guard against browser bugs where charIndex resets to 0 mid-speech
+        // If we are significantly into the text (e.g. > 5 words) and suddenly get a 0 index, ignore it
+        // Note: With offset, a 0 index from browser becomes charOffsetRef.current
+        if (event.charIndex === 0 && wordIndex > 5) {
+          return;
+        }
+
         if (foundWordIndex >= 0 && foundWordIndex < wordsRef.current.length) {
           const word = wordsRef.current[foundWordIndex];
 
@@ -680,8 +727,7 @@ export function TTSReader({ text }: TTSReaderProps) {
           const wordsReadInSection = sectionWordCounts.get(word.sectionId) || 0;
           const sectionTotalWords = sectionWords.length;
 
-          if (wordsReadInSection >= Math.ceil(sectionTotalWords * 0.5)) {
-            // Mark section as read if we've read 50% or more
+          if (wordsReadInSection >= Math.ceil(sectionTotalWords * 0.85)) {
             if (!useAppStore.getState().readSections.has(word.sectionId)) {
               markSectionAsRead(word.sectionId);
 
@@ -716,6 +762,7 @@ export function TTSReader({ text }: TTSReaderProps) {
       setIsPaused(false);
       setCurrentWordIndex(0);
       setCurrentSectionId(null);
+      charOffsetRef.current = 0; // Reset offset
 
       // Mark current section as read
       if (currentSection) {
@@ -765,6 +812,10 @@ export function TTSReader({ text }: TTSReaderProps) {
     };
 
     utterance.onerror = (event) => {
+      // Don't treat cancel as error
+      if (event.error === 'interrupted' || event.error === 'canceled') {
+        return;
+      }
       setIsPlaying(false);
       setIsPaused(false);
     };
@@ -843,7 +894,7 @@ export function TTSReader({ text }: TTSReaderProps) {
         <div className="flex items-center gap-2">
           {!isPlaying && !isPaused && (
             <Button
-              onClick={handlePlay}
+              onClick={() => handlePlay()}
               size="sm"
               className="flex-1"
               aria-label="Start reading"
@@ -855,7 +906,7 @@ export function TTSReader({ text }: TTSReaderProps) {
           )}
           {isPlaying && (
             <Button
-              onClick={handlePause}
+              onClick={() => handlePause()}
               size="sm"
               variant="outline"
               className="flex-1"
@@ -867,7 +918,7 @@ export function TTSReader({ text }: TTSReaderProps) {
           )}
           {isPaused && (
             <Button
-              onClick={handlePlay}
+              onClick={() => handlePlay()}
               size="sm"
               className="flex-1"
               aria-label="Resume reading"
@@ -926,12 +977,24 @@ export function TTSReader({ text }: TTSReaderProps) {
             min="0.5"
             max="2"
             step="0.1"
-            value={rate}
+            value={localRate}
             onChange={(e) => {
-              const newRate = parseFloat(e.target.value);
-              setRate(newRate);
+              setLocalRate(parseFloat(e.target.value));
+            }}
+            onMouseUp={() => {
+              setRate(localRate);
               if (utteranceRef.current) {
-                utteranceRef.current.rate = newRate;
+                utteranceRef.current.rate = localRate;
+                if (isPaused) {
+                  window.speechSynthesis.resume();
+                  window.speechSynthesis.pause();
+                }
+              }
+            }}
+            onTouchEnd={() => {
+              setRate(localRate);
+              if (utteranceRef.current) {
+                utteranceRef.current.rate = localRate;
                 if (isPaused) {
                   window.speechSynthesis.resume();
                   window.speechSynthesis.pause();
@@ -940,6 +1003,19 @@ export function TTSReader({ text }: TTSReaderProps) {
             }}
             className="w-full"
             aria-label="Reading speed"
+          />
+        </div>
+
+        {/* Follow Along Toggle */}
+        <div className="flex items-center justify-between">
+          <Label htmlFor="auto-scroll-toggle" className="text-sm text-muted-foreground cursor-pointer">
+            Follow Along
+          </Label>
+          <Switch
+            id="auto-scroll-toggle"
+            checked={autoScroll}
+            onCheckedChange={setAutoScroll}
+            aria-label="Toggle auto-scrolling"
           />
         </div>
       </CardContent>
