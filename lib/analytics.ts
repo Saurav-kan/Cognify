@@ -395,7 +395,8 @@ export async function getUniqueVisitorCount(days: number = 1): Promise<number> {
  */
 export async function getAnalyticsSummary(): Promise<{
   activeUsers: number;
-  uniqueVisitors: number; // Added
+  uniqueVisitors: number; // Today's unique visitors
+  totalUniqueUsers: number; // All-time unique visitors
   totalApiCalls: number;
   cacheHitRate: number;
   totalTokensUsed: number;
@@ -404,9 +405,10 @@ export async function getAnalyticsSummary(): Promise<{
   topProviders: Array<{ provider: string; calls: number }>;
   topEndpoints: Array<{ endpoint: string; calls: number }>;
 }> {
-  const [activeUsers, uniqueVisitors, apiStats, ttsStats] = await Promise.all([
+  const [activeUsers, uniqueVisitors, totalUniqueUsers, apiStats, ttsStats] = await Promise.all([
     getActiveUserCount(),
     getUniqueVisitorCount(1), // Today's unique visitors
+    getUniqueVisitorCount(999), // All-time unique visitors
     getApiCallStats(7),
     getTTSStats(7),
   ]);
@@ -435,6 +437,7 @@ export async function getAnalyticsSummary(): Promise<{
   return {
     activeUsers,
     uniqueVisitors,
+    totalUniqueUsers,
     totalApiCalls: apiStats.totalCalls,
     cacheHitRate: apiStats.cacheHitRate,
     totalTokensUsed,
