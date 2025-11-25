@@ -15,8 +15,8 @@ An accessibility-first study aid that converts hostile educational content into 
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **AI**: Multi-Provider Free Tier Mesh
   - Groq (llama-3.1-8b-instant) - Speed layer
-  - SiliconFlow (Qwen/Qwen2.5-7B-Instruct) - Volume layer
-  - Google Gemini (gemini-2.5-flash) - Vision/context layer
+  - SiliconFlow (tencent/Hunyuan-MT-7B) - Volume layer
+  - Google Gemini (gemini-2.0-flash-lite) - Vision/context layer
   - GitHub Models (gpt-4o) - Intelligence layer
 - **AI SDK**: Vercel AI SDK with smart routing
 - **OCR**: Tesseract.js (client-side processing)
@@ -142,7 +142,7 @@ This project uses a **multi-provider free tier mesh** to balance load across mul
 - **`GOOGLE_GENERATIVE_AI_API_KEY`**: Google AI API key (Vision/Context Layer)
 
   - Get from: https://aistudio.google.com/app/apikey
-  - Free tier: 15 RPM, 1,000,000 TPM (handles images & long context)
+  - Free tier: 30 RPM, 1,000,000 TPM (handles images & long context)
 
 - **`GITHUB_TOKEN`**: GitHub token (Intelligence Layer - best reasoning)
   - Get from: https://github.com/settings/tokens
@@ -192,7 +192,7 @@ This project is designed for deployment on Vercel:
 - **Groq**: 30 RPM, 6,000 TPM
 - **SiliconFlow**: 1,000 RPM, 500,000 TPM
 - **HuggingFace**: Generous free tier limits
-- **Google Gemini**: 15 RPM, 1,000,000 TPM
+- **Google Gemini**: 30 RPM, 1,000,000 TPM
 - **GitHub**: 50 requests/day
 
 The smart router automatically balances load to stay within these limits.

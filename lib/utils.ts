@@ -27,3 +27,33 @@ export function cleanOCRText(text: string): string {
     .trim();
 }
 
+
+/**
+ * Splits text into chunks (virtual pages) of approximately N words
+ */
+export function chunkText(text: string, wordsPerPage: number = 500): string[] {
+  const words = text.split(/\s+/);
+  const chunks: string[] = [];
+  let currentChunk: string[] = [];
+  let currentWordCount = 0;
+
+  for (const word of words) {
+    currentChunk.push(word);
+    currentWordCount++;
+
+    if (currentWordCount >= wordsPerPage) {
+      // Try to end on a sentence boundary if possible
+      if (/[.!?]$/.test(word) || currentWordCount > wordsPerPage + 50) {
+        chunks.push(currentChunk.join(" "));
+        currentChunk = [];
+        currentWordCount = 0;
+      }
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join(" "));
+  }
+
+  return chunks;
+}

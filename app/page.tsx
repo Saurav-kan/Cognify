@@ -15,7 +15,9 @@ import { BookOpen, Upload } from "lucide-react";
 export default function HomePage() {
   const [text, setText] = useState("");
   const router = useRouter();
-  const setTextInStore = useAppStore((state) => state.setText);
+  const setPdfSession = useAppStore((state) => state.setPdfSession);
+  const setPageText = useAppStore((state) => state.setPageText);
+  const setPageImage = useAppStore((state) => state.setPageImage);
   const clearPdfSession = useAppStore((state) => state.clearPdfSession);
 
   const handleStartReading = () => {
@@ -26,14 +28,32 @@ export default function HomePage() {
         return;
       }
 
-      // Ensure any previous PDF session is cleared when switching to manual text
-      clearPdfSession();
-      // Store text in Zustand store (which persists to LocalStorage)
-      setTextInStore(sanitized);
+      // Chunk the text into "virtual pages"
+      const { chunkText } = require("@/lib/utils"); // Dynamic import to avoid server/client issues if any
+      const chunks = chunkText(sanitized, 500); // 500 words per page
 
       // Generate unique ID for session
       const sessionId =
         Date.now().toString(36) + Math.random().toString(36).substr(2);
+      const virtualPdfId = `text-${sessionId}`;
+
+      // Clear previous session
+      clearPdfSession();
+
+      // Initialize new "Virtual PDF" session
+      setPdfSession({
+        pdfId: virtualPdfId,
+        sessionId: sessionId,
+        name: "Pasted Text",
+        pageCount: chunks.length,
+      });
+
+      // Pre-populate the page cache with our chunks
+      chunks.forEach((chunk: string, index: number) => {
+        setPageText(index + 1, chunk);
+        // No images for text mode
+        setPageImage(index + 1, ""); 
+      });
 
       // Navigate to reader page
       router.push(`/reader/${sessionId}`);

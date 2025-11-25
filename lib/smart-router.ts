@@ -37,9 +37,9 @@ export function selectModel(input: RouterInput): ModelSelection {
   if (hasImage || wordCount > 10000 || input.text.length > 50000) {
     return {
       provider: "gemini",
-      modelId: "gemini-2.5-flash",
+      modelId: "gemini-2.0-flash-lite",
       reason:
-        "Large context or image input - Gemini handles 1M tokens and vision",
+        "Large context or image input - Gemini 2.0 Flash-Lite handles 1M tokens and has high RPM (30)",
     };
   }
 

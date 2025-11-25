@@ -267,7 +267,7 @@ export async function streamFromProvider(options: StreamOptions) {
           process.env.GOOGLE_GENERATIVE_AI_API_KEY || ""
         );
         const geminiModel = genAI.getGenerativeModel({
-          model: model.modelId || "gemini-2.5-flash",
+          model: model.modelId || "gemini-2.0-flash-lite",
         });
 
         // Build the prompt with system message and history
@@ -498,7 +498,7 @@ export async function streamFromProvider(options: StreamOptions) {
                 process.env.GOOGLE_GENERATIVE_AI_API_KEY || ""
               );
               const geminiModel = genAI.getGenerativeModel({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.0-flash-lite",
               });
 
               let fullPrompt = finalSystemPrompt

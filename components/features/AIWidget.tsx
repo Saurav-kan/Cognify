@@ -50,7 +50,7 @@ export function AIWidget({ text }: AIWidgetProps) {
       .slice(0, contextWords)
       .join(" ");
 
-    return `${beforeContext} ${afterContext}`.trim();
+    return `${beforeContext} ${selectedText} ${afterContext}`.trim();
   };
 
   // Handle Text Selection
@@ -164,7 +164,7 @@ export function AIWidget({ text }: AIWidgetProps) {
         // Calculate position relative to viewport, handling scroll
         setButtonPosition({
           x: rect.left + rect.width / 2,
-          y: rect.top + window.scrollY - 10,
+          y: rect.top - 10, // Fixed position uses viewport coordinates, no scrollY needed
         });
 
         setShowButton(true);
@@ -182,13 +182,22 @@ export function AIWidget({ text }: AIWidgetProps) {
       }
     };
 
+    const handleScroll = () => {
+      if (showButton) {
+        setShowButton(false);
+      }
+    };
+
     document.addEventListener("mouseup", handleSelection);
     document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("scroll", handleScroll, { capture: true });
+    
     return () => {
       document.removeEventListener("mouseup", handleSelection);
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("scroll", handleScroll, { capture: true });
     };
-  }, [text]);
+  }, [text, showButton]);
 
   const cleanup = () => {
     if (pollIntervalRef.current) {
