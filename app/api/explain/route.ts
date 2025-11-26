@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { selectModel } from "@/lib/smart-router";
 import { streamFromProvider, checkApiKeys } from "@/lib/ai-providers";
-import { cache, generateCacheKey, hashString } from "@/lib/cache";
+import { cache, generateCacheKey, hashString } from "@/lib/api-cache";
 import { rateLimiter, getClientIdentifier } from "@/lib/rate-limit";
 import { enqueueJob, isQueueAvailable } from "@/backend/queue/queue";
 import { ExplainJobData } from "@/backend/queue/jobs";
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
           taskType: taskType || "simple",
         });
 
-    const cachedResponse = cache.get<string>(cacheKey);
+    const cachedResponse = cache.get(cacheKey);
     if (cachedResponse) {
       // Return cached response as SSE stream
       const encoder = new TextEncoder();
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
                 : provider === "siliconflow"
                 ? "tencent/Hunyuan-MT-7B"
                 : provider === "gemini"
-                ? "gemini-2.5-flash"
+                ? "gemini-2.0-flash-lite"
                 : provider === "huggingface"
                 ? "meta-llama/Llama-3.1-8B-Instruct"
                 : "gpt-4o",
@@ -249,8 +249,8 @@ export async function POST(req: NextRequest) {
     if (context && typeof context === "string" && context.trim().length > 0) {
       // Concise context-based explanation
       systemPrompt =
-        "You are a study assistant. Based on the context provided, give the definition of the target word. Keep it short and focused on how the word is used in that specific context.";
-      prompt = `Context: "${context}"\n\nTarget word: ${term}\n\nBased on the context of the sentence above, give the definition of the target word. Keep it short.`;
+        "You are a study assistant. Return a JSON object with 'definition' (string), 'synonyms' (array of strings), and 'example' (string). The example should show the word used in a sentence relevant to the context.";
+      prompt = `Context: "${context}"\n\nTarget word: ${term}\n\nBased on the context, provide a definition, 3 synonyms, and an example sentence. Return ONLY JSON.`;
 
       console.log(`[API Explain] Context being sent to prompt:`);
       console.log(`[API Explain] ========================================`);
@@ -260,8 +260,8 @@ export async function POST(req: NextRequest) {
       console.log(`[API Explain] ${prompt}`);
     } else {
       systemPrompt =
-        "Study assistant. Be concise. Use bullet points. Omit polite filler. Max 100 words.";
-      prompt = `Target word: ${term}\n\nExplain this term in simple terms using an analogy.`;
+        "Study assistant. Return a JSON object with 'definition' (string), 'synonyms' (array of strings), and 'example' (string).";
+      prompt = `Target word: ${term}\n\nExplain this term. Provide a simple definition, 3 synonyms, and an analogy or example sentence. Return ONLY JSON.`;
       console.log(
         `[API Explain] No context provided - using general explanation`
       );
@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
       model: modelSelection,
       prompt,
       systemPrompt,
-      maxTokens: 50,
+      maxTokens: 300, // Increased for JSON
     });
     console.log(
       `[API Explain] ✅ Stream received from ${modelSelection.provider}`
@@ -320,7 +320,9 @@ export async function POST(req: NextRequest) {
 
           // Cache the response (only if no context, as context makes each request unique)
           if (fullResponse && !context) {
-            cache.set(cacheKey, fullResponse, 3600 * 1000); // 1 hour TTL
+            // Try to parse JSON for cleaner caching if possible, but storing raw string is fine too
+            // The frontend will need to handle parsing
+            cache.set(cacheKey, fullResponse, { ttl: 3600 * 1000 }); // 1 hour TTL
           }
 
           controller.close();

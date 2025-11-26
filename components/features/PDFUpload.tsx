@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Loader2, FileInput, FileWarning } from "lucide-react";
 import { loadPdfFromArrayBuffer, releasePdf } from "@/lib/pdf-loader";
 import { useAppStore } from "@/lib/store";
+import { calculateFileHash } from "@/lib/hash";
+import { loadPdfData } from "@/lib/cache";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
@@ -80,12 +82,14 @@ export function PDFUpload({ onPdfReady }: PDFUploadProps) {
         clearPdfSession();
       }
 
-      const pdfId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `pdf-${Date.now().toString(36)}-${Math.random()
-              .toString(36)
-              .slice(2)}`;
+      const pdfId = await calculateFileHash(arrayBuffer);
+      console.log("[PDF Upload] Calculated PDF Hash (ID):", pdfId);
+
+      // Check if we have cached data for this hash
+      const cachedData = await loadPdfData(pdfId);
+      if (cachedData) {
+        console.log("[PDF Upload] ✅ Found cached data for this PDF!");
+      }
 
       const sessionId = `${Date.now().toString(36)}-${Math.random()
         .toString(36)

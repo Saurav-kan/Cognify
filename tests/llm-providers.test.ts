@@ -230,7 +230,7 @@ describe("LLM Provider Tests", () => {
 
         const modelSelection = {
           provider: "gemini" as const,
-          modelId: "gemini-2.5-flash",
+          modelId: "gemini-2.0-flash-lite",
           reason: "Test",
         };
 

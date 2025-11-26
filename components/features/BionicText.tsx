@@ -48,6 +48,10 @@ function splitIntoSections(text: string): string[] {
 export function BionicText({ text, enabled, className, fontFamily = "inter" }: BionicTextProps) {
   // Use selector to ensure re-render when readSections changes
   const readSections = useAppStore((state) => state.readSections);
+  const lineHeight = useAppStore((state) => state.lineHeight);
+  const letterSpacing = useAppStore((state) => state.letterSpacing);
+  const fontSize = useAppStore((state) => state.fontSize);
+  const bionicStrength = useAppStore((state) => state.bionicStrength);
   
   const sections = useMemo(() => {
     if (!text) return [];
@@ -56,8 +60,8 @@ export function BionicText({ text, enabled, className, fontFamily = "inter" }: B
 
   const transformedSections = useMemo(() => {
     if (!enabled) return sections;
-    return sections.map((section) => transformToBionic(section));
-  }, [sections, enabled]);
+    return sections.map((section) => transformToBionic(section, bionicStrength));
+  }, [sections, enabled, bionicStrength]);
   
   // Force re-render when readSections changes by using it in the dependency
   const sectionKeys = useMemo(() => {
@@ -77,6 +81,11 @@ export function BionicText({ text, enabled, className, fontFamily = "inter" }: B
       )}
       role="article"
       aria-label={enabled ? "Reading content with bionic reading enabled" : "Reading content"}
+      style={{
+        lineHeight: lineHeight,
+        letterSpacing: `${letterSpacing}em`,
+        fontSize: `${fontSize}px`,
+      }}
     >
       {transformedSections.map((section, index) => {
         const sectionId = `section-${index}`;

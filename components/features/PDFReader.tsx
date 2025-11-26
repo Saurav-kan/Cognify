@@ -5,10 +5,11 @@ import { useAppStore } from "@/lib/store";
 import { getPageText, getPageImage } from "@/lib/pdf-loader";
 import { BionicText } from "./BionicText";
 import { PDFSummarySidebar } from "./PDFSummarySidebar";
+import { FlashcardStudyModal } from "./FlashcardStudyModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, scheduleIdleTask, cancelIdleTask } from "@/lib/utils";
 
 export function PDFReader() {
   const currentPdfId = useAppStore((state: any) => state.currentPdfId);
@@ -33,10 +34,22 @@ export function PDFReader() {
   );
   const [pageInputValue, setPageInputValue] = useState<string>("");
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const summaryQueueRef = useRef<Array<{ pageNum: number; pageText: string }>>(
+  
+  // Study Modal State
+  const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
+  const [studyCards, setStudyCards] = useState<string[]>([]);
+  const [studyTitle, setStudyTitle] = useState("");
+
+  // Summary generation queue
+  const summaryQueueRef = useRef<Array<{ pageNum: number; pageText: string; forceRefresh?: boolean }>>(
     []
   );
   const isProcessingQueueRef = useRef(false);
+  
+  // Page loading queue
+  const pageLoadQueueRef = useRef<number[]>([]);
+  const isPageLoadingRef = useRef(false);
+  const idleTaskRef = useRef<number | null>(null);
 
   // Process summary queue with dynamic batching (Token & Page limits)
   const processSummaryQueue = async () => {
@@ -109,7 +122,9 @@ export function PDFReader() {
   ) => {
     // Filter out pages that are already generating or cached
     const pagesToProcess = pages.filter(
-      (p) => !generatingSummaries.has(p.pageNum) && !pageSummaryCache[p.pageNum]
+      (p) => 
+        !generatingSummaries.has(p.pageNum) && 
+        (!pageSummaryCache[p.pageNum] || (p as any).forceRefresh)
     );
 
     if (pagesToProcess.length === 0) {
@@ -134,6 +149,7 @@ export function PDFReader() {
           pages: pagesToProcess.map((p) => ({
             pageNumber: p.pageNum,
             pageText: p.pageText,
+            forceRefresh: (p as any).forceRefresh, // Pass forceRefresh to API
           })),
         }),
       });
@@ -175,9 +191,18 @@ export function PDFReader() {
               
               // Update cache for each page
               pagesToProcess.forEach(({ pageNum }) => {
-                const summary = summaries[pageNum.toString()] || summaries[pageNum];
-                if (summary && typeof summary === "string") {
-                  setPageSummary(pageNum, summary);
+                const data = summaries[pageNum.toString()] || summaries[pageNum];
+                if (data) {
+                  // Handle both string (legacy) and object (new) formats
+                  if (typeof data === "string") {
+                    setPageSummary(pageNum, data);
+                  } else if (typeof data === "object" && data.summary) {
+                    setPageSummary(pageNum, {
+                      summary: data.summary,
+                      flashcards: data.flashcards || [],
+                      keyPoints: data.keyPoints || data.key_points || [],
+                    });
+                  }
                 }
               });
               return;
@@ -237,21 +262,40 @@ export function PDFReader() {
       // Parse JSON response to extract individual page summaries
       try {
         // Extract JSON from the summary text (may have markdown code blocks)
+        // Extract JSON from the summary text
         let jsonText = fullSummary.trim();
-        // Remove markdown code blocks if present
+        
+        // 1. Try to remove markdown code blocks
         if (jsonText.startsWith("```json")) {
           jsonText = jsonText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
         } else if (jsonText.startsWith("```")) {
           jsonText = jsonText.replace(/^```\n?/, "").replace(/\n?```$/, "");
         }
 
+        // 2. If it still doesn't start with {, try to find the first { and last }
+        if (!jsonText.startsWith("{")) {
+          const match = jsonText.match(/\{[\s\S]*\}/);
+          if (match) {
+            jsonText = match[0];
+          }
+        }
+
         const summaries = JSON.parse(jsonText);
 
         // Update cache for each page
         pagesToProcess.forEach(({ pageNum }) => {
-          const summary = summaries[pageNum.toString()] || summaries[pageNum];
-          if (summary && typeof summary === "string") {
-            setPageSummary(pageNum, summary);
+          const data = summaries[pageNum.toString()] || summaries[pageNum];
+          if (data) {
+            // Handle both string (legacy) and object (new) formats
+            if (typeof data === "string") {
+              setPageSummary(pageNum, data);
+            } else if (typeof data === "object" && data.summary) {
+              setPageSummary(pageNum, {
+                summary: data.summary,
+                flashcards: data.flashcards || [],
+                keyPoints: data.keyPoints || data.key_points || [],
+              });
+            }
           }
         });
       } catch (parseError) {
@@ -289,27 +333,55 @@ export function PDFReader() {
     await generateBatchSummaries([{ pageNum, pageText }]);
   };
 
-  // Queue summary for generation (instead of generating immediately)
-  const queueSummary = (pageNum: number, pageText: string) => {
-    if (generatingSummaries.has(pageNum) || pageSummaryCache[pageNum]) {
-      return; // Already generating or cached
-    }
-
+  // Queue summary generation for a specific page
+  const queueSummary = (pageNum: number, text: string, forceRefresh: boolean = false) => {
+    if (!text || text.trim().length < 50) return;
+    
+    // Check if already cached (unless forcing refresh)
+    if (!forceRefresh && pageSummaryCache[pageNum]) return;
+    
     // Check if already in queue
-    if (summaryQueueRef.current.some((item) => item.pageNum === pageNum)) {
-      return;
-    }
+    if (summaryQueueRef.current.some(item => item.pageNum === pageNum)) return;
 
-    summaryQueueRef.current.push({ pageNum, pageText });
+    // Add to queue
+    summaryQueueRef.current.push({ pageNum, pageText: text, forceRefresh });
+    
+    // Trigger processing
     processSummaryQueue();
   };
 
-  // Pre-load pages (text + image + summary)
-  const preloadPages = async (pageNumbers: number[]) => {
-    const loadPromises = pageNumbers.map(async (pageNum) => {
-      if (pageNum < 1 || pageNum > pdfPageCount) return;
+  // Handle manual regeneration of summary
+  const handleRegeneratePage = (pageNum: number) => {
+    const text = pageTextCache[pageNum];
+    if (text) {
+      // Clear existing summary first to show loading state
+      setPageSummary(pageNum, null); // Clear to show loading state immediately
+      queueSummary(pageNum, text, true);
+    }
+  };
 
+  const handleStudyPage = (pageNum: number) => {
+    const data = pageSummaryCache[pageNum];
+    if (data && typeof data === "object" && data.flashcards && data.flashcards.length > 0) {
+      setStudyCards(data.flashcards);
+      setStudyTitle(`Page ${pageNum} Flashcards`);
+      setIsStudyModalOpen(true);
+    }
+  };
+
+  // Process the page load queue sequentially
+  const processPageLoadQueue = async () => {
+    if (isPageLoadingRef.current || pageLoadQueueRef.current.length === 0) {
+      return;
+    }
+
+    isPageLoadingRef.current = true;
+    const pageNum = pageLoadQueueRef.current.shift(); // Get next page
+
+    if (pageNum && pageNum >= 1 && pageNum <= pdfPageCount) {
       try {
+        // console.log(`[PDF Reader] Processing page load for ${pageNum}`);
+        
         // Load text if not cached
         if (!pageTextCache[pageNum]) {
           const text = await getPageText(currentPdfId!, pageNum);
@@ -329,14 +401,51 @@ export function PDFReader() {
           setPageImage(pageNum, imageData);
         }
       } catch (err) {
-        console.error(
-          `[PDF Reader] ❌ Error pre-loading page ${pageNum}:`,
-          err
-        );
+        console.error(`[PDF Reader] ❌ Error loading page ${pageNum}:`, err);
       }
-    });
+    }
 
-    await Promise.all(loadPromises);
+    isPageLoadingRef.current = false;
+
+    // Schedule next processing if queue is not empty
+    if (pageLoadQueueRef.current.length > 0) {
+      idleTaskRef.current = scheduleIdleTask(() => {
+        processPageLoadQueue();
+      });
+    }
+  };
+
+  // Pre-load pages (text + image + summary) - SEQUENTIAL
+  const preloadPages = (pageNumbers: number[]) => {
+    // Add unique pages to queue
+    const newPages = pageNumbers.filter(
+      (p) => 
+        p >= 1 && 
+        p <= pdfPageCount && 
+        !pageLoadQueueRef.current.includes(p) &&
+        (!pageTextCache[p] || !pageImageCache[p]) // Only queue if not fully loaded
+    );
+
+    if (newPages.length === 0) return;
+
+    // Prioritize these new pages (add to front or back? usually surrounding pages are high priority)
+    // For now, just append. If we want to prioritize, we could clear queue or prepend.
+    // Let's prepend to prioritize the most recently requested pages (e.g. user scrolled to them)
+    pageLoadQueueRef.current = [...newPages, ...pageLoadQueueRef.current];
+    
+    // Remove duplicates again just in case
+    pageLoadQueueRef.current = [...new Set(pageLoadQueueRef.current)];
+
+    // Trigger processing if not already running
+    if (!isPageLoadingRef.current) {
+      // Cancel any pending idle task to restart immediately
+      if (idleTaskRef.current) {
+        cancelIdleTask(idleTaskRef.current);
+      }
+      idleTaskRef.current = scheduleIdleTask(() => {
+        processPageLoadQueue();
+      });
+    }
   };
 
   // Initial load: pages 1-4
@@ -488,7 +597,19 @@ export function PDFReader() {
 
   const currentPageText = pageTextCache[currentPage] || "";
   const currentPageImage = pageImageCache[currentPage];
-  const currentPageSummary = pageSummaryCache[currentPage] || null;
+  const currentPageSummaryData = pageSummaryCache[currentPage];
+  const currentPageSummary =
+    typeof currentPageSummaryData === "string"
+      ? currentPageSummaryData
+      : currentPageSummaryData?.summary || null;
+  const currentPageFlashcards =
+    currentPageSummaryData && typeof currentPageSummaryData === "object"
+      ? currentPageSummaryData.flashcards
+      : [];
+  const currentPageKeyPoints =
+    currentPageSummaryData && typeof currentPageSummaryData === "object"
+      ? currentPageSummaryData.keyPoints
+      : [];
   const isGeneratingSummary = generatingSummaries.has(currentPage);
 
   // Render a single page with virtualization
@@ -646,14 +767,25 @@ export function PDFReader() {
         <PDFSummarySidebar
           pageNumber={currentPage}
           summary={currentPageSummary}
+          flashcards={currentPageFlashcards}
+          keyPoints={currentPageKeyPoints}
           isGenerating={isGeneratingSummary}
           onGenerate={() => {
             if (currentPageText) {
               queueSummary(currentPage, currentPageText);
             }
           }}
+          onRegenerate={() => handleRegeneratePage(currentPage)}
+          onStudy={() => handleStudyPage(currentPage)}
         />
       </div>
+
+      <FlashcardStudyModal
+        isOpen={isStudyModalOpen}
+        onClose={() => setIsStudyModalOpen(false)}
+        cards={studyCards}
+        title={studyTitle}
+      />
     </div>
   );
 }

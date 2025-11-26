@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { selectModel } from "@/lib/smart-router";
 import { streamFromProvider, checkApiKeys } from "@/lib/ai-providers";
-import { cache, generateCacheKey, hashString } from "@/lib/cache";
+import { cache, generateCacheKey, hashString } from "@/lib/api-cache";
 import { rateLimiter, getClientIdentifier } from "@/lib/rate-limit";
 import { enqueueJob, isQueueAvailable } from "@/backend/queue/queue";
 import { SummarizeJobData } from "@/backend/queue/jobs";
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       pageNumber: pageNumber || 0,
     });
 
-    const cachedResponse = cache.get<string>(cacheKey);
+    const cachedResponse = cache.get(cacheKey);
     if (cachedResponse) {
       // Return cached response as SSE stream
       const encoder = new TextEncoder();
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     if (geminiCheck.available) {
       modelSelection = {
         provider: "gemini",
-        modelId: "gemini-2.5-flash",
+        modelId: "gemini-2.0-flash-lite",
         reason:
           "Summary task - Gemini has 1M TPM capacity (highest limit) for batch operations",
       };
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
                 : provider === "siliconflow"
                 ? "tencent/Hunyuan-MT-7B"
                 : provider === "gemini"
-                ? "gemini-2.5-flash"
+                ? "gemini-2.0-flash-lite"
                 : provider === "huggingface"
                 ? "meta-llama/Llama-3.1-8B-Instruct"
                 : "gpt-4o",
@@ -312,7 +312,7 @@ export async function POST(req: NextRequest) {
 
           // Cache the response
           if (fullResponse) {
-            cache.set(cacheKey, fullResponse, 24 * 3600 * 1000); // 24 hours TTL for summaries
+            cache.set(cacheKey, fullResponse, { ttl: 24 * 3600 * 1000 }); // 24 hours TTL for summaries
           }
 
           controller.close();

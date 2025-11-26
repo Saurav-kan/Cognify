@@ -1,14 +1,25 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { savePdfData, loadPdfData, clearPdfData } from "./cache";
+
+export interface PageSummaryData {
+  summary: string;
+  flashcards: string[];
+  keyPoints?: string[];
+}
 
 interface AppState {
   currentText: string;
   bionicEnabled: boolean;
+  bionicStrength: number; // 10-100 (percentage)
   focusModeEnabled: boolean;
   currentSentenceIndex: number;
   fontFamily: "inter" | "opendyslexic";
-  fontFamily: "inter" | "opendyslexic";
-  theme: "light" | "dark" | "grey" | "dim";
+  theme: "light" | "dark" | "light-grey" | "dim" | "grey";
+  // Visual Customization
+  lineHeight: number;
+  letterSpacing: number;
+  fontSize: number;
   // ADHD-friendly features
   pomodoroEnabled: boolean;
   pomodoroWorkMinutes: number;
@@ -29,16 +40,21 @@ interface AppState {
   currentPage: number;
   pageTextCache: { [page: number]: string };
   pageImageCache: { [page: number]: string };
-  pageSummaryCache: { [page: number]: string };
+  pageSummaryCache: { [page: number]: PageSummaryData | string };
+  chapterGroupSize: number;
   pdfDisplayMode: "text" | "image" | "both";
   pdfScrollingMode: "paginated" | "continuous";
   // Actions
   setText: (text: string) => void;
   toggleBionic: () => void;
+  setBionicStrength: (strength: number) => void;
   toggleFocusMode: () => void;
   setSentenceIndex: (index: number) => void;
   setFontFamily: (font: "inter" | "opendyslexic") => void;
-  setTheme: (theme: "light" | "dark" | "grey" | "dim") => void;
+  setTheme: (theme: "light" | "dark" | "light-grey" | "dim" | "grey") => void;
+  setLineHeight: (value: number) => void;
+  setLetterSpacing: (value: number) => void;
+  setFontSize: (value: number) => void;
   togglePomodoro: () => void;
   setPomodoroWorkMinutes: (minutes: number) => void;
   setPomodoroBreakMinutes: (minutes: number) => void;
@@ -62,20 +78,26 @@ interface AppState {
   setCurrentPage: (page: number) => void;
   setPageText: (page: number, text: string) => void;
   setPageImage: (page: number, imageData: string) => void;
-  setPageSummary: (page: number, summary: string) => void;
+  setPageSummary: (page: number, data: PageSummaryData | string) => void;
+  setChapterGroupSize: (size: number) => void;
   setPdfDisplayMode: (mode: "text" | "image" | "both") => void;
   setPdfScrollingMode: (mode: "paginated" | "continuous") => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentText: "",
       bionicEnabled: false,
+      bionicStrength: 50,
       focusModeEnabled: false,
       currentSentenceIndex: 0,
-      fontFamily: "inter",
-      theme: "light",
+      fontFamily: "inter" as "inter" | "opendyslexic",
+      theme: "light" as "light" | "dark" | "light-grey" | "dim" | "grey",
+      // Visual Customization Defaults
+      lineHeight: 1.6,
+      letterSpacing: 0,
+      fontSize: 18,
       // ADHD-friendly features
       pomodoroEnabled: false,
       pomodoroWorkMinutes: 25,
@@ -96,17 +118,22 @@ export const useAppStore = create<AppState>()(
       pageTextCache: {},
       pageImageCache: {},
       pageSummaryCache: {},
-      pdfDisplayMode: "both",
-      pdfScrollingMode: "paginated",
+      chapterGroupSize: 10,
+      pdfDisplayMode: "both" as "text" | "image" | "both",
+      pdfScrollingMode: "paginated" as "paginated" | "continuous",
       // Actions
       setText: (text) => set({ currentText: text }),
       toggleBionic: () =>
         set((state) => ({ bionicEnabled: !state.bionicEnabled })),
+      setBionicStrength: (strength) => set({ bionicStrength: strength }),
       toggleFocusMode: () =>
         set((state) => ({ focusModeEnabled: !state.focusModeEnabled })),
       setSentenceIndex: (index) => set({ currentSentenceIndex: index }),
       setFontFamily: (font) => set({ fontFamily: font }),
       setTheme: (theme) => set({ theme }),
+      setLineHeight: (value) => set({ lineHeight: value }),
+      setLetterSpacing: (value) => set({ letterSpacing: value }),
+      setFontSize: (value) => set({ fontSize: value }),
       togglePomodoro: () =>
         set((state) => {
           const newEnabled = !state.pomodoroEnabled;
@@ -162,11 +189,11 @@ export const useAppStore = create<AppState>()(
           newSet.add(sectionId);
           return { readSections: newSet };
         }),
-      isSectionRead: (sectionId) => {
+      isSectionRead: (sectionId: string): boolean => {
         const state = useAppStore.getState();
         return state.readSections.has(sectionId);
       },
-      setPdfSession: ({ pdfId, sessionId, name, pageCount }) =>
+      setPdfSession: ({ pdfId, sessionId, name, pageCount }) => {
         set({
           pdfSessionId: sessionId,
           currentPdfId: pdfId,
@@ -181,8 +208,26 @@ export const useAppStore = create<AppState>()(
           pdfScrollingMode: "paginated",
           readSections: new Set(),
           readingProgress: 0,
-        }),
-      clearPdfSession: () =>
+        });
+
+        // Load cached data from IDB
+        loadPdfData(pdfId).then((data) => {
+          if (data) {
+            set({
+              pageTextCache: data.textCache || {},
+              pageImageCache: data.imageCache || {},
+              pageSummaryCache: data.summaryCache || {},
+            });
+          }
+        });
+      },
+      clearPdfSession: () => {
+        const { currentPdfId } = get();
+        if (currentPdfId) {
+          // Optional: Clear IDB data when session is cleared?
+          // For now, we keep it as a cache.
+          // clearPdfData(currentPdfId); 
+        }
         set({
           pdfSessionId: null,
           currentPdfId: null,
@@ -192,30 +237,71 @@ export const useAppStore = create<AppState>()(
           pageTextCache: {},
           pageImageCache: {},
           pageSummaryCache: {},
-        }),
+        });
+      },
       setCurrentPage: (page) => set({ currentPage: page }),
-      setPageText: (page, text) =>
-        set((state) => ({
-          pageTextCache: { ...state.pageTextCache, [page]: text },
-        })),
-      setPageImage: (page, imageData) =>
-        set((state) => ({
-          pageImageCache: { ...state.pageImageCache, [page]: imageData },
-        })),
-      setPageSummary: (page, summary) =>
-        set((state) => ({
-          pageSummaryCache: { ...state.pageSummaryCache, [page]: summary },
-        })),
+      setPageText: (page, text) => {
+        set((state) => {
+          const newCache = { ...state.pageTextCache, [page]: text };
+          // Save to IDB
+          if (state.currentPdfId) {
+            savePdfData(state.currentPdfId, {
+              textCache: newCache,
+              imageCache: state.pageImageCache,
+              summaryCache: state.pageSummaryCache,
+            });
+          }
+          return { pageTextCache: newCache };
+        });
+      },
+      setPageImage: (page, imageData) => {
+        set((state) => {
+          const newCache = { ...state.pageImageCache, [page]: imageData };
+          // Save to IDB
+          if (state.currentPdfId) {
+            savePdfData(state.currentPdfId, {
+              textCache: state.pageTextCache,
+              imageCache: newCache,
+              summaryCache: state.pageSummaryCache,
+            });
+          }
+          return { pageImageCache: newCache };
+        });
+      },
+      setPageSummary: (page: number, data: PageSummaryData | string) => {
+        set((state) => {
+          const newCache = { ...state.pageSummaryCache, [page]: data };
+          // Save to IDB
+          if (state.currentPdfId) {
+            savePdfData(state.currentPdfId, {
+              textCache: state.pageTextCache,
+              imageCache: state.pageImageCache,
+              summaryCache: newCache,
+            });
+          }
+          return { pageSummaryCache: newCache };
+        });
+      },
+      setChapterGroupSize: (size: number) => set({ chapterGroupSize: size }),
       setPdfDisplayMode: (mode) => set({ pdfDisplayMode: mode }),
       setPdfScrollingMode: (mode) => set({ pdfScrollingMode: mode }),
     }),
     {
       name: "current_session",
       // Custom serialization for Set
-      partialize: (state) => ({
-        ...state,
-        readSections: Array.from(state.readSections),
-      }),
+      partialize: (state) => {
+        // Exclude heavy cache data from localStorage
+        const {
+          pageTextCache,
+          pageImageCache,
+          pageSummaryCache,
+          ...persistedState
+        } = state;
+        return {
+          ...persistedState,
+          readSections: Array.from(state.readSections),
+        };
+      },
       // Custom deserialization for Set
       merge: (persistedState: any, currentState: AppState) => {
         // Handle migration from darkMode boolean to theme string
@@ -225,8 +311,10 @@ export const useAppStore = create<AppState>()(
         }
         if (persistedState && 'theme' in persistedState) {
           theme = persistedState.theme;
-          // Migrate sepia to grey
-          if (theme === 'sepia') {
+          // Migrate old themes
+          if ((theme as string) === 'grey') {
+            theme = 'light-grey';
+          } else if ((theme as string) === 'sepia') {
             theme = 'grey';
           }
         }

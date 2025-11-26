@@ -260,7 +260,7 @@ export async function streamFromProvider(options: StreamOptions) {
         // Gemini using Google Generative AI SDK
         console.log(
           `[AI Provider] Initializing Gemini client for ${
-            model.modelId || "gemini-2.5-flash"
+            model.modelId || "gemini-2.0-flash-lite"
           }`
         );
         const genAI = new GoogleGenerativeAI(
@@ -533,7 +533,7 @@ export async function streamFromProvider(options: StreamOptions) {
                           id: `chatcmpl-${Date.now()}`,
                           object: "chat.completion.chunk",
                           created: Math.floor(Date.now() / 1000),
-                          model: "gemini-2.5-flash",
+                          model: "gemini-2.0-flash-lite",
                           choices: [
                             {
                               index: 0,

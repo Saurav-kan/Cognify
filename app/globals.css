@@ -61,7 +61,7 @@
     --chart-5: 340 75% 55%;
   }
 
-  .grey {
+  .light-grey {
     --background: 220 14% 96%; /* Slate 50 */
     --foreground: 220 10% 10%; /* Slate 900 */
     --card: 220 14% 94%;
@@ -114,6 +114,32 @@
     --chart-4: 280 55% 60%;
     --chart-5: 340 65% 55%;
   }
+  .grey {
+    --background: 220 13% 25%; /* Slate 800 - Lighter than Dim */
+    --foreground: 220 13% 90%; /* Slate 100 */
+    --card: 220 13% 30%;
+    --card-foreground: 220 13% 90%;
+    --popover: 220 13% 25%;
+    --popover-foreground: 220 13% 90%;
+    --primary: 220 13% 90%;
+    --primary-foreground: 220 13% 25%;
+    --secondary: 220 13% 35%;
+    --secondary-foreground: 220 13% 90%;
+    --muted: 220 13% 35%;
+    --muted-foreground: 220 13% 60%;
+    --accent: 220 13% 35%;
+    --accent-foreground: 220 13% 90%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 35%;
+    --input: 220 13% 35%;
+    --ring: 220 13% 90%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
 }
 
 @layer base {
@@ -165,7 +191,7 @@
     @apply bg-slate-900/60 border-white/5;
   }
 
-  .grey .glass-panel {
+  .light-grey .glass-panel {
     @apply bg-slate-100/60 border-slate-200/50;
   }
 
@@ -208,7 +234,7 @@ body {
   background-attachment: fixed;
 }
 
-:root:not(.grey):not(.dim) body {
+:root:not(.light-grey):not(.dim) body {
   background-image: radial-gradient(
       circle at 50% 0%,
       rgba(120, 119, 198, 0.1) 0%,
@@ -235,11 +261,20 @@ body {
   );
 }
 
-/* Grey Theme Gradient - Cool Neutral */
-.grey body {
+/* Light Grey Theme Gradient - Cool Neutral */
+.light-grey body {
   background-image: radial-gradient(
     circle at 50% 0%,
     rgba(148, 163, 184, 0.1) 0%,
+    transparent 50%
+  );
+}
+
+/* Grey Theme Gradient - Neutral Slate */
+.grey body {
+  background-image: radial-gradient(
+    circle at 50% 0%,
+    rgba(148, 163, 184, 0.05) 0%,
     transparent 50%
   );
 }
@@ -261,4 +296,21 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* 3D Flip Animation Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
 }

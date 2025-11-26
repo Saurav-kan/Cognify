@@ -1,9 +1,10 @@
 /**
  * Transforms text into bionic reading format by bolding the first half of each word
  * @param text - The input text to transform
+ * @param strength - The percentage of the word to bold (10-100), default 50
  * @returns The transformed text with HTML bold tags
  */
-export function transformToBionic(text: string): string {
+export function transformToBionic(text: string, strength: number = 50): string {
   if (!text) return "";
 
   // Split text into words while preserving whitespace and punctuation
@@ -30,8 +31,10 @@ export function transformToBionic(text: string): string {
         return word;
       }
 
-      // Calculate how many characters to bold (first half, rounded up)
-      const boldLength = Math.ceil(coreWord.length / 2);
+      // Calculate how many characters to bold based on strength
+      // Ensure at least 1 char is bolded if strength > 0
+      const ratio = Math.max(0.1, Math.min(1, strength / 100));
+      const boldLength = Math.ceil(coreWord.length * ratio);
       const boldPart = coreWord.slice(0, boldLength);
       const normalPart = coreWord.slice(boldLength);
 

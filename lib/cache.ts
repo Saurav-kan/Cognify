@@ -1,102 +1,95 @@
-/**
- * Simple in-memory cache for Edge runtime
- * Note: This is per-instance, not shared across edge functions
- * For production, consider using Vercel KV or Redis
- */
+import { get, set, del } from "idb-keyval";
 
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
+export interface PageSummaryData {
+  summary: string;
+  flashcards: string[];
 }
 
-class SimpleCache {
-  private cache = new Map<string, CacheEntry<any>>();
-  private readonly defaultTTL: number;
+export interface PdfData {
+  textCache?: { [page: number]: string };
+  imageCache?: { [page: number]: string };
+  summaryCache?: { [page: number]: string | PageSummaryData };
+  lastAccessed?: number;
+}
 
-  constructor(defaultTTL: number = 3600 * 1000) {
-    // Default TTL: 1 hour
-    this.defaultTTL = defaultTTL;
-  }
+const DB_PREFIX = "pdf_data_";
+const INDEX_KEY = "pdf_cache_index";
+const MAX_CACHE_SIZE = 10;
 
-  set<T>(key: string, value: T, ttl?: number): void {
-    const expiresAt = Date.now() + (ttl || this.defaultTTL);
-    this.cache.set(key, { value, expiresAt });
-  }
+type CacheIndex = Record<string, number>; // pdfId -> timestamp
 
-  get<T>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (!entry) {
-      return null;
-    }
+async function getIndex(): Promise<CacheIndex> {
+  return (await get<CacheIndex>(INDEX_KEY)) || {};
+}
 
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.value as T;
-  }
-
-  has(key: string): boolean {
-    const entry = this.cache.get(key);
-    if (!entry) {
-      return false;
-    }
-
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return false;
-    }
-
-    return true;
-  }
-
-  delete(key: string): void {
-    this.cache.delete(key);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  // Clean up expired entries (call periodically)
-  cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
-        this.cache.delete(key);
-      }
-    }
+async function updateIndex(pdfId: string) {
+  try {
+    const index = await getIndex();
+    index[pdfId] = Date.now();
+    await set(INDEX_KEY, index);
+  } catch (error) {
+    console.error("[Cache] Failed to update index:", error);
   }
 }
 
-// Global cache instance
-export const cache = new SimpleCache(3600 * 1000); // 1 hour default TTL
+async function pruneCache() {
+  try {
+    const index = await getIndex();
+    const entries = Object.entries(index);
 
-/**
- * Generate cache key from request parameters
- */
-export function generateCacheKey(
-  type: "explain" | "summarize" | "summarize-batch",
-  params: Record<string, string | number>
-): string {
-  const sortedParams = Object.keys(params)
-    .sort()
-    .map((key) => `${key}:${params[key]}`)
-    .join("|");
-  return `${type}:${sortedParams}`;
-}
+    if (entries.length <= MAX_CACHE_SIZE) return;
 
-/**
- * Hash function for creating stable cache keys
- */
-export function hashString(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    // Sort by timestamp (oldest first)
+    entries.sort(([, timeA], [, timeB]) => timeA - timeB);
+
+    // Identify items to remove
+    const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+
+    for (const [id] of toRemove) {
+      await del(`${DB_PREFIX}${id}`);
+      delete index[id];
+    }
+
+    await set(INDEX_KEY, index);
+    console.log(`[Cache] Pruned ${toRemove.length} old items.`);
+  } catch (error) {
+    console.error("[Cache] Failed to prune cache:", error);
   }
-  return Math.abs(hash).toString(36);
 }
 
+export async function savePdfData(pdfId: string, data: PdfData): Promise<void> {
+  try {
+    await set(`${DB_PREFIX}${pdfId}`, data);
+    await updateIndex(pdfId);
+    await pruneCache();
+  } catch (error) {
+    console.error(`[Cache] Failed to save PDF data for ${pdfId}:`, error);
+  }
+}
+
+export async function loadPdfData(pdfId: string): Promise<PdfData | undefined> {
+  try {
+    const data = await get<PdfData>(`${DB_PREFIX}${pdfId}`);
+    if (data) {
+      // Update access time asynchronously
+      updateIndex(pdfId);
+    }
+    return data;
+  } catch (error) {
+    console.error(`[Cache] Failed to load PDF data for ${pdfId}:`, error);
+    return undefined;
+  }
+}
+
+export async function clearPdfData(pdfId: string): Promise<void> {
+  try {
+    await del(`${DB_PREFIX}${pdfId}`);
+    const index = await getIndex();
+    if (index[pdfId]) {
+      delete index[pdfId];
+      await set(INDEX_KEY, index);
+    }
+  } catch (error) {
+    console.error(`[Cache] Failed to clear PDF data for ${pdfId}:`, error);
+  }
+}

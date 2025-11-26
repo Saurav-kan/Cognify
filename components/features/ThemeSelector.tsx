@@ -2,16 +2,17 @@
 
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { Sun, Moon, Coffee, CloudMoon } from "lucide-react";
+import { Sun, Moon, Coffee, CloudMoon, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ThemeSelector() {
-  const theme = useAppStore((state) => state.theme);
-  const setTheme = useAppStore((state) => state.setTheme);
+  const theme = useAppStore((state: any) => state.theme);
+  const setTheme = useAppStore((state: any) => state.setTheme);
 
   const themes = [
     { id: "light", label: "Light", icon: Sun },
-    { id: "grey", label: "Grey", icon: Coffee }, // Keeping Coffee icon for now, or maybe change to something else if needed
+    { id: "light-grey", label: "Light Grey", icon: Coffee },
+    { id: "grey", label: "Grey", icon: BookOpen },
     { id: "dim", label: "Dim", icon: CloudMoon },
     { id: "dark", label: "Dark", icon: Moon },
   ] as const;

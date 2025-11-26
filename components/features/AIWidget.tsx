@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface AIWidgetProps {
   text: string;
@@ -309,6 +310,34 @@ export function AIWidget({ text }: AIWidgetProps) {
     }
   };
 
+  // Helper to parse explanation
+  const parseExplanation = (text: string | object) => {
+    if (typeof text === "object") return text as any;
+    try {
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) {
+        jsonText = jsonText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
+      } else if (jsonText.startsWith("```")) {
+        jsonText = jsonText.replace(/^```\n?/, "").replace(/\n?```$/, "");
+      }
+      
+      // If it still doesn't start with {, try to find the first { and last }
+      if (!jsonText.startsWith("{")) {
+        const match = jsonText.match(/\{[\s\S]*\}/);
+        if (match) {
+          jsonText = match[0];
+        }
+      }
+      
+      return JSON.parse(jsonText);
+    } catch (e) {
+      return { definition: text };
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<"definition" | "synonyms" | "context">("definition");
+  const parsedExplanation = explanation ? parseExplanation(explanation) : null;
+
   return (
     <>
       {/* Floating Button */}
@@ -338,7 +367,7 @@ export function AIWidget({ text }: AIWidgetProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-[100px] py-4">
+          <div className="min-h-[150px] py-2">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center space-y-4 py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -359,11 +388,90 @@ export function AIWidget({ text }: AIWidgetProps) {
                   <RefreshCw className="w-3 h-3 mr-2" /> Retry
                 </Button>
               </div>
-            ) : (
-              <div className="prose prose-sm dark:prose-invert leading-relaxed">
-                {explanation}
+            ) : parsedExplanation ? (
+              <div className="space-y-4">
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-muted/50 p-1 rounded-lg mb-4">
+                  <button
+                    onClick={() => setActiveTab("definition")}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
+                      activeTab === "definition"
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                  >
+                    Definition
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("synonyms")}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
+                      activeTab === "synonyms"
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                  >
+                    Synonyms
+                  </button>
+                </div>
+
+                {/* Tab Content */}
+                <div className="min-h-[80px] animate-in fade-in slide-in-from-bottom-2 duration-300 mb-6">
+                  {activeTab === "definition" && (
+                    <div className="prose prose-sm dark:prose-invert leading-relaxed">
+                      <p>{parsedExplanation.definition}</p>
+                    </div>
+                  )}
+
+                  {activeTab === "synonyms" && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Similar words to "{selectedText}":
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {parsedExplanation.synonyms &&
+                        Array.isArray(parsedExplanation.synonyms) &&
+                        parsedExplanation.synonyms.length > 0 ? (
+                          parsedExplanation.synonyms.map(
+                            (syn: string, i: number) => (
+                              <span
+                                key={i}
+                                className="px-2.5 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium"
+                              >
+                                {syn}
+                              </span>
+                            )
+                          )
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">
+                            No synonyms found.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Context Section (Always Visible at Bottom) */}
+                <div className="border-t pt-4">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                    Context
+                  </p>
+                  {context ? (
+                    <div className="bg-muted/30 p-3 rounded-md border border-border/50">
+                      <p className="text-sm text-foreground/90 italic leading-relaxed whitespace-pre-wrap">
+                        "...{context}..."
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No context available from the page.
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

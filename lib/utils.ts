@@ -57,3 +57,25 @@ export function chunkText(text: string, wordsPerPage: number = 500): string[] {
 
   return chunks;
 }
+
+/**
+ * Schedules a task to run when the main thread is idle.
+ * Falls back to setTimeout if requestIdleCallback is not supported.
+ */
+export function scheduleIdleTask(callback: () => void, timeout: number = 1000): number {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    return (window as any).requestIdleCallback(callback, { timeout });
+  }
+  return setTimeout(callback, 1) as unknown as number;
+}
+
+/**
+ * Cancels a scheduled idle task.
+ */
+export function cancelIdleTask(id: number) {
+  if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
+    (window as any).cancelIdleCallback(id);
+  } else {
+    clearTimeout(id);
+  }
+}

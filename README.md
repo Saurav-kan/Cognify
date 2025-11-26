@@ -16,8 +16,15 @@ An accessibility-first study aid that converts hostile educational content into 
 ## Features
 
 - **Neuro-Bionic Reader**: Transforms dense text to visually guide your eyes and prevent line skipping
+- **Smart PDF Reader**: Upload PDFs (up to 25MB) with automatic page-by-page AI summarization
+- **Flashcard Generator**: Automatically generates study flashcards from your reading material
+- **Text-to-Speech (TTS)**: Listen to content with synchronized word highlighting and adjustable speed
 - **Panic Button (Focus Mode)**: Hides everything except the current sentence when feeling overwhelmed
-- **Jargon Crusher**: Highlight complex terms to get simple, contextual explanations using AI
+- **Jargon Crusher**: Select any text to get an AI-powered explanation with:
+  - **Definition**: Simple, clear meaning
+  - **Synonyms**: Alternative words
+  - **Context**: Original usage context preserved
+- **Themes**: Multiple reading themes including Light Grey, Grey, Dim, and Dark
 - **PDF Un-Breaker (OCR)**: Upload images of textbooks to extract and process text
 
 ## System Architecture
@@ -34,8 +41,15 @@ An accessibility-first study aid that converts hostile educational content into 
   - Google Gemini (gemini-2.0-flash-lite) - Vision/context layer
   - GitHub Models (gpt-4o) - Intelligence layer
 - **AI SDK**: Vercel AI SDK with smart routing
+- **Caching & Storage**:
+  - **Vercel KV (Redis)**: Server-side API response caching
+  - **IndexedDB**: Client-side storage for large PDF data
+  - **LocalStorage**: User preferences (themes, settings)
+- **Background Jobs**:
+  - **Vercel Functions**: Serverless processing
+  - **Cron-job.org**: Reliable worker triggering
 - **OCR**: Tesseract.js (client-side processing)
-- **State Management**: Zustand with LocalStorage persistence
+- **State Management**: Zustand
 - **Animations**: Framer Motion
 
 ## Getting Started
@@ -44,7 +58,6 @@ An accessibility-first study aid that converts hostile educational content into 
 
 - Node.js 18+
 - npm or yarn
-- OpenAI API key (for Jargon Crusher feature)
 
 ### Installation
 
@@ -77,6 +90,11 @@ SILICONFLOW_API_KEY=your_siliconflow_api_key_here
 GROQ_API_KEY=your_groq_api_key_here
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
 GITHUB_TOKEN=your_github_token_here
+
+# Optional for Caching
+KV_URL=your_vercel_kv_url
+KV_REST_API_URL=your_vercel_kv_rest_api_url
+KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
 ```
 
 5. Run the development server:
@@ -91,7 +109,7 @@ npm run dev
 
 ### Starting a Reading Session
 
-1. **Upload an Image**: Use the "PDF Un-Breaker" section to upload a JPG or PNG image of your textbook
+1. **Upload a PDF**: Use the "PDF Loader" to upload a PDF file
 2. **Or Paste Text**: Paste your study material directly into the text area
 3. Click "Start Reading" to begin
 
@@ -100,7 +118,9 @@ npm run dev
 - **Bionic Reading**: Toggle to enable visual guidance by bolding the first half of each word
 - **Focus Mode**: Activate to hide everything except the current sentence. Use arrow keys (↑ ↓) to navigate
 - **Jargon Crusher**: Select any text to get an AI-powered explanation
-- **Dark Mode**: Toggle for comfortable reading in low light
+- **Flashcards**: Click the "Flashcards" tab to review auto-generated study questions
+- **Listen**: Use the TTS controls to listen to the text
+- **Themes**: Switch between Light Grey, Grey, Dim, and Dark themes for comfort
 - **Font Selection**: Choose between Inter (default) or OpenDyslexic
 
 ## Project Structure
@@ -108,7 +128,9 @@ npm run dev
 ```
 ├── app/
 │   ├── api/
-│   │   └── explain/          # AI explanation endpoint
+│   │   ├── explain/          # AI explanation endpoint
+│   │   ├── summarize/        # Page summarization endpoint
+│   │   └── cron/             # Background worker endpoints
 │   ├── reader/
 │   │   └── [id]/             # Reader page with dynamic session ID
 │   ├── layout.tsx            # Root layout
@@ -118,16 +140,20 @@ npm run dev
 │   ├── features/
 │   │   ├── AIWidget.tsx      # Jargon Crusher component
 │   │   ├── BionicText.tsx    # Bionic reading component
-│   │   ├── OCRUpload.tsx     # OCR file upload
-│   │   └── PanicOverlay.tsx  # Focus mode overlay
+│   │   ├── FlashcardManager.tsx # Flashcard system
+│   │   ├── PDFReader.tsx     # Main PDF reading interface
+│   │   ├── PDFUpload.tsx     # PDF file upload
+│   │   ├── ThemeSelector.tsx # Theme switcher
+│   │   └── TTSReader.tsx     # Text-to-Speech component
 │   └── ui/                   # shadcn/ui components
 ├── lib/
-│   ├── bionic-algo.ts        # Bionic transformation logic
+│   ├── api-cache.ts          # Server-side caching logic
+│   ├── cache.ts              # Client-side IndexedDB caching
 │   ├── store.ts              # Zustand state management
-│   ├── utils.ts              # Utility functions
 │   ├── smart-router.ts       # Multi-provider load balancer
-│   ├── ai-providers.ts       # AI provider clients and configuration
-│   └── optimization-utils.ts # Token reduction strategies
+│   └── ai-providers.ts       # AI provider clients and configuration
+├── backend/
+│   └── workers/              # Background job processors
 └── package.json
 ```
 
@@ -138,28 +164,20 @@ This project uses a **multi-provider free tier mesh** to balance load across mul
 ### Required (at least one):
 
 - **`GROQ_API_KEY`**: Groq API key (Speed Layer - fastest for short interactions)
-
   - Get from: https://console.groq.com/keys
   - Free tier: 30 RPM, 6,000 TPM
 
 - **`SILICONFLOW_API_KEY`**: SiliconFlow API key (Volume Layer - best throughput)
-
   - Get from: https://siliconflow.cn/
   - Free tier: 1,000 RPM, 80,000 TPM
-  - Time Sensisitve Free Teir: 1,000 RPM, 1,000,000 TPM
-  - **Optional**: App works without this - will use other available providers
 
 - **`HUGGINGFACE_API_KEY`**: HuggingFace API key (Alternative Layer - good free tier models)
-
   - Get from: https://huggingface.co/settings/tokens
   - Free tier: Generous limits, good for complex reasoning tasks
-  - Uses OpenAI-compatible Inference API
 
 - **`GOOGLE_GENERATIVE_AI_API_KEY`**: Google AI API key (Vision/Context Layer)
-
   - Get from: https://aistudio.google.com/app/apikey
   - Free tier: 30 RPM, 1,000,000 TPM (handles images & long context)
-    
 
 - **`GITHUB_TOKEN`**: GitHub token (Intelligence Layer - best reasoning)
   - Get from: https://github.com/settings/tokens
@@ -180,6 +198,7 @@ The system automatically selects the best provider based on:
 1. **Prompt Compression**: All requests use a compressed system prompt (saves ~80% tokens)
 2. **Rolling Window**: Groq/SiliconFlow only get last 6 messages (Gemini gets full history)
 3. **Automatic Fallback**: If primary provider fails or key is missing, automatically tries other configured providers in order (Groq → SiliconFlow → HuggingFace → Gemini → GitHub)
+4. **Intelligent Caching**: Responses are cached to reduce API calls and latency
 
 ## Deployment
 
@@ -187,14 +206,14 @@ This project is designed for deployment on Vercel:
 
 1. Push your code to GitHub
 2. Import the project in Vercel
-3. Add your `OPENAI_API_KEY` in Vercel's environment variables
+3. Add your API keys and KV credentials in Vercel's environment variables
 4. Deploy!
 
 ## Privacy & Data Storage
 
-- All notes and text are stored locally in your browser (LocalStorage)
-- No data is sent to servers except for AI explanations (when you use Jargon Crusher)
-- OCR processing happens entirely in your browser
+- **Local First**: Most data (PDFs, notes) is stored locally in your browser (IndexedDB/LocalStorage)
+- **Transient AI**: Text sent to AI for summarization/explanation is not stored by the AI providers (per their API policies)
+- **Caching**: Anonymous cached responses may be stored in Vercel KV to improve performance
 
 ## Cost Considerations
 
@@ -202,7 +221,7 @@ This project is designed for deployment on Vercel:
 - **AI API**: **$0.00/month** - Uses only free tier providers
   - Combined capacity: ~1,200 requests/minute
   - Smart routing distributes load efficiently
-- **Storage**: Browser LocalStorage (free, no server costs)
+- **Storage**: Browser LocalStorage/IndexedDB (free) + Vercel KV (Free Tier)
 
 ### Free Tier Limits (Combined)
 
@@ -223,6 +242,7 @@ This tool is designed with neurodivergent users in mind:
 - High contrast options
 - Relaxed spacing and line-height
 - Optional OpenDyslexic font
+- **TTS Support**: Auditory reinforcement for reading
 
 ## License
 

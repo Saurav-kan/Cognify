@@ -7,7 +7,7 @@
 import { NextRequest } from "next/server";
 import { selectModel } from "@/lib/smart-router";
 import { streamFromProvider, checkApiKeys } from "@/lib/ai-providers";
-import { cache, generateCacheKey, hashString } from "@/lib/cache";
+import { cache, generateCacheKey, hashString } from "@/lib/api-cache";
 import { rateLimiter, getClientIdentifier } from "@/lib/rate-limit";
 import { enqueueJob, isQueueAvailable } from "@/backend/queue/queue";
 import { SummarizeBatchJobData } from "@/backend/queue/jobs";
@@ -24,7 +24,8 @@ interface BatchPage {
 
 export async function POST(req: NextRequest) {
   try {
-    const { pages }: { pages: BatchPage[] } = await req.json();
+    const { pages, forceRefresh }: { pages: BatchPage[]; forceRefresh?: boolean } =
+      await req.json();
     const userIp = req.ip || "anonymous";
 
     if (!pages || !Array.isArray(pages) || pages.length === 0) {
@@ -71,12 +72,14 @@ export async function POST(req: NextRequest) {
     const pageTextHashes = batchPages
       .map((p) => hashString(p.pageText.trim()))
       .join("-");
-    const cacheKey = generateCacheKey("summarize-batch", {
+    const cacheKey = generateCacheKey("summarize-batch-v2", {
       pages: pageNumbers,
       hashes: pageTextHashes,
     });
 
-    const cachedResponse = cache.get<string>(cacheKey);
+    const cachedResponse = !forceRefresh
+      ? (cache.get(cacheKey) as string | undefined)
+      : undefined;
     if (cachedResponse) {
       console.log(`[API Summarize Batch] Cache HIT for pages ${pageNumbers}`);
       // Return cached response as SSE stream
@@ -174,7 +177,7 @@ export async function POST(req: NextRequest) {
       baseUrl?: string;
     } = {
       provider: "gemini",
-      modelId: "gemini-2.5-flash",
+      modelId: "gemini-2.0-flash-lite",
       reason:
         "Batch processing - Gemini has 1M token window for multiple pages",
     };
@@ -237,13 +240,28 @@ export async function POST(req: NextRequest) {
       .map((page, index) => `--- Page ${page.pageNumber} ---\n${page.pageText}`)
       .join("\n\n");
 
-    const prompt = `Provide concise 2-3 sentence summaries for each of the following ${batchPages.length} pages. Format your response as a JSON object with page numbers as keys and summaries as values.
+    const prompt = `Analyze the following ${batchPages.length} pages. For each page:
+1. Generate a concise 2-3 sentence summary.
+2. Extract 3-5 Key Points (core facts/concepts).
+3. Generate Flashcards (Cloze Deletion format) based PRIMARILY on the Key Points:
+   - MANDATORY: Create at least 1-2 "General/Conceptual" cards (broad themes).
+   - OPTIONAL: Create additional "Detailed" cards for specific facts/terms if the text is dense.
+   - Total cards per page should be between 2 and 7, depending on information density.
+
+Format your response as a JSON object with page numbers as keys. Each value should be an object with "summary" (string), "keyPoints" (array of strings), and "flashcards" (array of strings) fields.
 
 Example format:
 {
-  "1": "Summary for page 1...",
-  "2": "Summary for page 2...",
-  "3": "Summary for page 3..."
+  "1": {
+    "summary": "Page 1 covers the structure of the cell...",
+    "keyPoints": ["Mitochondria produce energy", "Nucleus contains DNA", "Ribosomes make proteins"],
+    "flashcards": ["The {{c1::mitochondria}} is the powerhouse of the cell."]
+  },
+  "2": {
+    "summary": "Page 2 discusses DNA replication...",
+    "keyPoints": ["Occurs in S phase", "Semi-conservative", "Involves DNA polymerase"],
+    "flashcards": ["DNA replication occurs during the {{c1::S phase}} of the cell cycle."]
+  }
 }
 
 Pages to summarize:
@@ -258,8 +276,8 @@ ${pagesText}`;
       model: modelSelection,
       prompt,
       systemPrompt:
-        "Study assistant. Provide concise page summaries in JSON format. Focus on key concepts. Be clear and direct. Max 3 sentences per page.",
-      maxTokens: 150 * batchPages.length, // Scale tokens with page count
+        "You are a strict JSON API. Return ONLY the raw JSON object. Do not use markdown formatting (no ```json). Do not include any conversational text, introductions, or explanations.",
+      maxTokens: 400 * batchPages.length, // Increased tokens for key points
     });
 
     console.log(
@@ -279,8 +297,8 @@ ${pagesText}`;
       },
     });
 
-    // Track API call (estimate tokens - batch uses ~150 tokens per page)
-    const estimatedTokens = batchPages.length * 150;
+    // Track API call (estimate tokens - batch uses ~400 tokens per page now)
+    const estimatedTokens = batchPages.length * 400;
     trackApiCall(
       "summarize-batch",
       modelSelection.provider,
@@ -302,7 +320,8 @@ ${pagesText}`;
         if (done) break;
         fullResponseText += decoder.decode(value, { stream: true });
       }
-      cache.set(cacheKey, fullResponseText, 86400 * 1000); // Cache for 24 hours
+      cache.set(cacheKey, fullResponseText, { ttl: 86400 * 1000 }); // Cache for 24 hours
+      console.log("[API Summarize Batch] Raw LLM Response:", fullResponseText);
     }
 
     return response;

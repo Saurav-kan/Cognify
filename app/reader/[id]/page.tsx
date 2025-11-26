@@ -10,6 +10,14 @@ import { ProgressTracker } from "@/components/features/ProgressTracker";
 import { TTSReader } from "@/components/features/TTSReader";
 import { PDFReader } from "@/components/features/PDFReader";
 import { ThemeSelector } from "@/components/features/ThemeSelector";
+import { VisualSettings } from "@/components/features/VisualSettings";
+import { FlashcardManager } from "@/components/features/FlashcardManager";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Layers } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -20,7 +28,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Settings, ChevronLeft, ChevronRight, X, Lightbulb } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +53,7 @@ export default function ReaderPage() {
   } = useAppStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Get PDF session data
   const pdfSessionId = useAppStore((state) => state.pdfSessionId);
@@ -65,6 +74,23 @@ export default function ReaderPage() {
   useEffect(() => {
     startSession();
   }, [startSession]);
+
+  // Check for tutorial status
+  useEffect(() => {
+    const hasSeenTutorial = localStorage.getItem("hasSeenExplainTutorial");
+    if (!hasSeenTutorial) {
+      // Small delay to let the page load
+      const timer = setTimeout(() => {
+        setShowTutorial(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const dismissTutorial = () => {
+    setShowTutorial(false);
+    localStorage.setItem("hasSeenExplainTutorial", "true");
+  };
 
   // Show loading state if we have a PDF session but haven't loaded content yet
   if (!currentText && !pdfSessionId) {
@@ -106,6 +132,7 @@ export default function ReaderPage() {
             </Button>
           </div>
           <PomodoroTimer />
+          <VisualSettings />
           <TTSReader
             text={
               pdfSessionId
@@ -193,12 +220,25 @@ export default function ReaderPage() {
                     </div>
 
                     {/* Theme Selector */}
-                    <div className="flex items-center gap-2">
-                      <Label className="cursor-pointer">Theme:</Label>
-                      <ThemeSelector />
-                    </div>
+            <div className="flex items-center justify-between">
+              <Label>Theme</Label>
+              <ThemeSelector />
+            </div>
 
-                    {/* Font Selector */}
+          {/* Flashcard Manager */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full justify-start gap-2">
+                <Layers className="h-4 w-4" />
+                Manage Flashcards
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <FlashcardManager />
+            </DialogContent>
+          </Dialog>
+
+            {/* Font Selector */}
                     <div className="flex items-center gap-2">
                       <Label htmlFor="font-select" className="cursor-pointer">
                         Font:
@@ -333,6 +373,35 @@ export default function ReaderPage() {
 
       {/* AI Widget (always active for text selection) */}
       <AIWidget text={currentText} />
+      {/* Tutorial Toast */}
+      {showTutorial && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+          <Card className="w-full max-w-md shadow-2xl border-primary/20 bg-card/95 backdrop-blur">
+            <CardContent className="p-4 flex items-start gap-4">
+              <div className="bg-primary/10 p-2 rounded-full">
+                <Lightbulb className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold mb-1">Quick Tip</h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Highlight any text on the page to get an instant AI explanation or summary!
+                </p>
+                <Button size="sm" onClick={dismissTutorial}>
+                  Got it
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 -mt-1 -mr-2 text-muted-foreground hover:text-foreground"
+                onClick={dismissTutorial}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
