@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useAppStore } from "@/lib/store";
 import { getPageText, getPageImage } from "@/lib/pdf-loader";
 import { BionicText } from "./BionicText";
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn, scheduleIdleTask, cancelIdleTask } from "@/lib/utils";
+import { VariableSizeList as List } from "react-window";
+import AutoSizer from "react-virtualized-auto-sizer";
 
 export function PDFReader() {
   const currentPdfId = useAppStore((state: any) => state.currentPdfId);
@@ -33,7 +35,8 @@ export function PDFReader() {
     new Set()
   );
   const [pageInputValue, setPageInputValue] = useState<string>("");
-  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const listRef = useRef<List>(null);
+  const rowHeights = useRef<{ [index: number]: number }>({});
   
   // Study Modal State
   const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
@@ -488,54 +491,6 @@ export function PDFReader() {
     }
   }, [currentPdfId, currentPage, pdfPageCount, pdfScrollingMode, pageTextCache, pageImageCache]);
 
-  // Intersection observer for continuous scrolling mode
-  useEffect(() => {
-    if (pdfScrollingMode !== "continuous" || !currentPdfId || !pdfPageCount)
-      return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const pageElement = entry.target as HTMLElement;
-            const pageNum = parseInt(pageElement.dataset.pageNumber || "0");
-            
-            if (pageNum > 0 && pageNum <= pdfPageCount) {
-              // Update current page if this page is mostly visible
-              if (entry.intersectionRatio > 0.5) {
-                setCurrentPage(pageNum);
-              }
-
-              // Load this page and next 2 pages
-              const pagesToLoad = [pageNum, pageNum + 1, pageNum + 2].filter(
-                (p) => p <= pdfPageCount
-              );
-              preloadPages(pagesToLoad);
-            }
-          }
-        });
-      },
-      { 
-        rootMargin: "200px",
-        threshold: [0.1, 0.5] // Trigger at 10% and 50% visibility
-      }
-    );
-
-    // Observe all page elements
-    const timeoutId = setTimeout(() => {
-      pageRefs.current.forEach((ref) => {
-        if (ref) observer.observe(ref);
-      });
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      observer.disconnect();
-    };
-  }, [pdfScrollingMode, currentPdfId, pdfPageCount, pageTextCache]);
-
-  // ... (loadPage effect remains same)
-
   const handlePreviousPage = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
@@ -575,28 +530,119 @@ export function PDFReader() {
     }
   };
 
+  // Row component for react-window
+  const PageRow = useCallback(({ index, style, data }: any) => {
+    const pageNum = index + 1;
+    const { setRowHeight, width } = data;
+    const rowRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      if (rowRef.current) {
+        const height = rowRef.current.getBoundingClientRect().height;
+        // Add some padding/margin to height
+        const totalHeight = height + 64; // 64px for mb-8 pb-8
+        
+        if (rowHeights.current[index] !== totalHeight) {
+          rowHeights.current[index] = totalHeight;
+          setRowHeight(index, totalHeight);
+        }
+      }
+    }, [pageTextCache[pageNum], pageImageCache[pageNum], width, fontFamily, bionicEnabled, pdfDisplayMode]);
+
+    const pageText = pageTextCache[pageNum] || "";
+    const pageImage = pageImageCache[pageNum];
+
+    return (
+      <div style={style}>
+        <div
+          ref={rowRef}
+          data-page-number={pageNum}
+          className={cn(
+            "mb-8 pb-8 border-b last:border-b-0 min-h-[200px]",
+            fontFamily === "opendyslexic" && "font-dyslexic"
+          )}
+        >
+          <div className="mb-4 text-sm font-semibold text-muted-foreground">
+            Page {pageNum}
+          </div>
+
+          {(pdfDisplayMode === "image" || pdfDisplayMode === "both") &&
+            pageImage && (
+              <div className="mb-6">
+                <img
+                  src={pageImage}
+                  alt={`Page ${pageNum}`}
+                  className="w-full h-auto border rounded-lg shadow-sm"
+                />
+              </div>
+            )}
+
+          {(pdfDisplayMode === "text" || pdfDisplayMode === "both") &&
+            pageText && (
+              <div className="prose prose-lg dark:prose-invert max-w-none">
+                <BionicText
+                  text={pageText}
+                  enabled={bionicEnabled}
+                  fontFamily={fontFamily}
+                />
+              </div>
+            )}
+
+          {!pageText && !pageImage && (
+            <div className="text-center text-muted-foreground py-8">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              <p>Loading page {pageNum}...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }, [pageTextCache, pageImageCache, fontFamily, bionicEnabled, pdfDisplayMode]);
+
+  // Handle list scroll to update current page
+  const onItemsRendered = ({ visibleStartIndex, visibleStopIndex }: any) => {
+    // Update current page based on what's visible
+    // We use the middle of the visible range to determine "current" page
+    const middleIndex = Math.floor((visibleStartIndex + visibleStopIndex) / 2);
+    const newPage = middleIndex + 1;
+    
+    if (newPage !== currentPage) {
+      setCurrentPage(newPage);
+    }
+
+    // Preload pages around visible range
+    const startPage = Math.max(1, visibleStartIndex + 1 - 2);
+    const endPage = Math.min(pdfPageCount, visibleStopIndex + 1 + 2);
+    
+    const pagesToLoad = [];
+    for (let i = startPage; i <= endPage; i++) {
+      pagesToLoad.push(i);
+    }
+    
+    if (pagesToLoad.length > 0) {
+      preloadPages(pagesToLoad);
+    }
+  };
+
+  // Helper to set row height
+  const setRowHeight = useCallback((index: number, size: number) => {
+    if (listRef.current) {
+      listRef.current.resetAfterIndex(index);
+    }
+  }, []);
+
+  // Scroll to current page when switching modes or loading
+  useEffect(() => {
+    if (listRef.current && pdfScrollingMode === "continuous") {
+      listRef.current.scrollToItem(currentPage - 1, "start");
+    }
+  }, [pdfScrollingMode]);
+
   if (!currentPdfId || !pdfPageCount) {
     return null;
   }
 
-  // Get pages to render in continuous mode
-  const getPagesToRender = () => {
-    if (pdfScrollingMode === "paginated") {
-      return [currentPage];
-    }
-
-    // Continuous mode: render all loaded pages
-    const loadedPages: number[] = [];
-    for (let i = 1; i <= pdfPageCount; i++) {
-      if (pageTextCache[i] || pageImageCache[i]) {
-        loadedPages.push(i);
-      }
-    }
-    return loadedPages.length > 0 ? loadedPages : [1]; // At least show page 1
-  };
-
   const currentPageText = pageTextCache[currentPage] || "";
-  const currentPageImage = pageImageCache[currentPage];
   const currentPageSummaryData = pageSummaryCache[currentPage];
   const currentPageSummary =
     typeof currentPageSummaryData === "string"
@@ -612,82 +658,54 @@ export function PDFReader() {
       : [];
   const isGeneratingSummary = generatingSummaries.has(currentPage);
 
-  // Render a single page with virtualization
-  const renderPage = (pageNum: number, showPageNumber = false) => {
-    // Virtualization: Only render content if page is close to current page
-    // Render 3 pages before and 3 pages after current page
-    const isVisible = Math.abs(currentPage - pageNum) <= 3;
-    
+  // Render a single page (Paginated Mode)
+  const renderSinglePage = (pageNum: number) => {
     const pageText = pageTextCache[pageNum] || "";
     const pageImage = pageImageCache[pageNum];
 
     return (
       <div
         key={pageNum}
-        data-page-number={pageNum}
-        ref={(el) => {
-          if (el) pageRefs.current.set(pageNum, el);
-        }}
         className={cn(
-          "mb-8 pb-8 border-b last:border-b-0 min-h-[200px]", // Min height to prevent collapse
+          "mb-8 pb-8 border-b last:border-b-0 min-h-[200px]",
           fontFamily === "opendyslexic" && "font-dyslexic"
         )}
       >
-        {showPageNumber && (
-          <div className="mb-4 text-sm font-semibold text-muted-foreground">
-            Page {pageNum}
+        {(pdfDisplayMode === "image" || pdfDisplayMode === "both") &&
+          pageImage && (
+            <div className="mb-6">
+              <img
+                src={pageImage}
+                alt={`Page ${pageNum}`}
+                className="w-full h-auto border rounded-lg shadow-sm"
+              />
+            </div>
+          )}
+
+        {(pdfDisplayMode === "text" || pdfDisplayMode === "both") &&
+          pageText && (
+            <div className="prose prose-lg dark:prose-invert max-w-none">
+              <BionicText
+                text={pageText}
+                enabled={bionicEnabled}
+                fontFamily={fontFamily}
+              />
+            </div>
+          )}
+
+        {!pageText && !pageImage && (
+          <div className="text-center text-muted-foreground py-8">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+            <p>Loading page {pageNum}...</p>
           </div>
-        )}
-
-        {!isVisible ? (
-          // Placeholder for off-screen pages
-          <div className="h-[800px] flex items-center justify-center bg-muted/10 rounded-lg border border-dashed">
-            <p className="text-muted-foreground">Page {pageNum} (scrolled away)</p>
-          </div>
-        ) : (
-          <>
-            {/* Show image based on display mode */}
-            {(pdfDisplayMode === "image" || pdfDisplayMode === "both") &&
-              pageImage && (
-                <div className="mb-6">
-                  <img
-                    src={pageImage}
-                    alt={`Page ${pageNum}`}
-                    className="w-full h-auto border rounded-lg shadow-sm"
-                  />
-                </div>
-              )}
-
-            {/* Show text based on display mode */}
-            {(pdfDisplayMode === "text" || pdfDisplayMode === "both") &&
-              pageText && (
-                <div className="prose prose-lg dark:prose-invert max-w-none">
-                  <BionicText
-                    text={pageText}
-                    enabled={bionicEnabled}
-                    fontFamily={fontFamily}
-                  />
-                </div>
-              )}
-
-            {!pageText && !pageImage && (
-              <div className="text-center text-muted-foreground py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                <p>Loading page {pageNum}...</p>
-              </div>
-            )}
-          </>
         )}
       </div>
     );
   };
 
-
-
   return (
     <div className="flex flex-col h-full">
       {/* Pagination Controls */}
-      {/* ... (controls remain same) ... */}
       <div className="flex items-center justify-between gap-4 p-4 border-b bg-card">
         <Button
           variant="outline"
@@ -732,7 +750,7 @@ export function PDFReader() {
       {/* Page Content with Sidebar */}
       <div className="flex-1 flex overflow-hidden">
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden relative">
           {isLoading && pdfScrollingMode === "paginated" && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -746,19 +764,36 @@ export function PDFReader() {
           )}
 
           {!error && (
-            <div
-              className={cn(
-                "mx-auto max-w-4xl py-8 px-4",
-                fontFamily === "opendyslexic" && "font-dyslexic"
+            <div className="h-full w-full">
+              {pdfScrollingMode === "paginated" ? (
+                <div className="h-full overflow-y-auto p-4">
+                  <div className="mx-auto max-w-4xl">
+                    {renderSinglePage(currentPage)}
+                  </div>
+                </div>
+              ) : (
+                <div className="h-full w-full px-4">
+                  <AutoSizer>
+                    {({ height, width }: any) => (
+                      <List
+                        ref={listRef}
+                        height={height}
+                        width={width}
+                        itemCount={pdfPageCount}
+                        itemSize={(index) => rowHeights.current[index] || 800} // Default estimate
+                        onItemsRendered={onItemsRendered}
+                        itemData={{
+                          setRowHeight,
+                          width,
+                        }}
+                        className="mx-auto max-w-4xl no-scrollbar"
+                      >
+                        {PageRow}
+                      </List>
+                    )}
+                  </AutoSizer>
+                </div>
               )}
-            >
-              {pdfScrollingMode === "paginated"
-                ? // Paginated mode: single page
-                  renderPage(currentPage)
-                : // Continuous mode: all loaded pages
-                  getPagesToRender().map((pageNum) =>
-                    renderPage(pageNum, true)
-                  )}
             </div>
           )}
         </div>

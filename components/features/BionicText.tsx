@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { transformToBionic } from "@/lib/bionic-algo";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
@@ -45,7 +45,7 @@ function splitIntoSections(text: string): string[] {
   return sections;
 }
 
-export function BionicText({ text, enabled, className, fontFamily = "inter" }: BionicTextProps) {
+export const BionicText = React.memo(function BionicText({ text, enabled, className, fontFamily = "inter" }: BionicTextProps) {
   // Use selector to ensure re-render when readSections changes
   const readSections = useAppStore((state) => state.readSections);
   const lineHeight = useAppStore((state) => state.lineHeight);
@@ -110,5 +110,5 @@ export function BionicText({ text, enabled, className, fontFamily = "inter" }: B
       })}
     </div>
   );
-}
+});
 
