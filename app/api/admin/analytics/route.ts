@@ -9,6 +9,7 @@ import {
   getApiCallStats,
   getTTSStats,
   getFeatureStats,
+  getDailyActivity,
 } from "@/lib/analytics";
 import { getAllQueueStats } from "@/backend/queue/queue";
 import { getAllProviderUsage } from "@/backend/queue/rate-limiter";
@@ -98,6 +99,14 @@ export async function GET(req: NextRequest) {
       case "providers": {
         const usage = await getAllProviderUsage();
         return new Response(JSON.stringify(usage), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      case "daily-activity": {
+        const days = parseInt(url.searchParams.get("days") || "365", 10);
+        const activity = await getDailyActivity(days);
+        return new Response(JSON.stringify(activity), {
           headers: { "Content-Type": "application/json" },
         });
       }

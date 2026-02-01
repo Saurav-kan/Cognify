@@ -16,6 +16,7 @@ import {
   TrendingUp,
   BarChart3,
 } from "lucide-react";
+import { ActivityHeatMap } from "@/components/features/ActivityHeatMap";
 
 interface AnalyticsSummary {
   activeUsers: number;
@@ -336,7 +337,7 @@ export default function AdminPage() {
         </Card>
 
         {/* Provider Utilization */}
-        <Card>
+        <Card className="mb-8">
           <CardHeader>
             <CardTitle>Provider Utilization</CardTitle>
             <CardDescription>Rate limit usage by provider</CardDescription>
@@ -371,6 +372,9 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Activity Heat Map */}
+        <ActivityHeatMap adminSecret={adminSecret} />
       </div>
     </div>
   );

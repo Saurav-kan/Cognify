@@ -391,6 +391,42 @@ export async function getUniqueVisitorCount(days: number = 1): Promise<number> {
 }
 
 /**
+ * Get daily activity data for heat map
+ * Returns unique visitors per day for the last N days
+ */
+export async function getDailyActivity(days: number = 365): Promise<Record<string, number>> {
+  if (!isRedisConfigured()) {
+    return {};
+  }
+
+  try {
+    const redis = getRedisClient();
+    const today = new Date();
+    const activity: Record<string, number> = {};
+
+    // Get unique visitors count for each day
+    for (let i = 0; i < days; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0];
+
+      try {
+        const count = await redis.pfcount(`analytics:unique_visitors:${dateStr}`);
+        activity[dateStr] = count;
+      } catch (error) {
+        // If key doesn't exist, count is 0
+        activity[dateStr] = 0;
+      }
+    }
+
+    return activity;
+  } catch (error) {
+    console.error("[Analytics] Error getting daily activity:", error);
+    return {};
+  }
+}
+
+/**
  * Get overall analytics summary
  */
 export async function getAnalyticsSummary(): Promise<{
